@@ -403,6 +403,14 @@ class _CarbonBackend:
         self._carbon = ctypes.CDLL(
             "/System/Library/Frameworks/Carbon.framework/Carbon"
         )
+        # Built once, then reused everywhere: ctypes matches an argument against an
+        # argtype by class identity, so a struct class rebuilt per call would be
+        # rejected by the very signature declared for it.
+        self._EventTypeSpec, self._EventHotKeyID = self._structs()
+        self._HANDLER = ctypes.CFUNCTYPE(
+            ctypes.c_int32, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p
+        )
+        self._declare_signatures()
         self._triggers: dict[int, Callable[[], None]] = {}
         self._refs: dict[int, object] = {}
         self._next_id = 1
@@ -423,23 +431,73 @@ class _CarbonBackend:
 
         return EventTypeSpec, EventHotKeyID
 
+    def _declare_signatures(self) -> None:
+        """Pin every Carbon prototype before any of them is called.
+
+        Undeclared, ctypes assumes an ``int`` return and ``int`` arguments — 32
+        bits. ``GetApplicationEventTarget`` then hands back a **pointer truncated
+        to its low half**, and passing that on segfaults inside Carbon before the
+        first registration ever completes. Observed on Big Sur in M8; nothing off a
+        Mac can exercise it, so :func:`test_carbon_backend_declares_pointer_widths`
+        pins the declarations themselves.
+
+        The widths are the 64-bit ones: ``ItemCount`` and ``ByteCount`` are
+        ``unsigned long``, not ``UInt32``.
+        """
+        ctypes = self._ctypes
+        carbon = self._carbon
+        void_p = ctypes.c_void_p
+
+        carbon.GetApplicationEventTarget.restype = void_p
+        carbon.GetApplicationEventTarget.argtypes = []
+
+        carbon.InstallEventHandler.restype = ctypes.c_int32
+        carbon.InstallEventHandler.argtypes = [
+            void_p,                                # EventTargetRef
+            self._HANDLER,                         # EventHandlerUPP
+            ctypes.c_ulong,                        # ItemCount inNumTypes
+            ctypes.POINTER(self._EventTypeSpec),   # const EventTypeSpec *inList
+            void_p,                                # void *inUserData
+            ctypes.POINTER(void_p),                # EventHandlerRef *outRef
+        ]
+
+        carbon.RegisterEventHotKey.restype = ctypes.c_int32
+        carbon.RegisterEventHotKey.argtypes = [
+            ctypes.c_uint32,          # UInt32 inHotKeyCode
+            ctypes.c_uint32,          # UInt32 inHotKeyModifiers
+            self._EventHotKeyID,      # EventHotKeyID inHotKeyID, by value
+            void_p,                   # EventTargetRef inTarget
+            ctypes.c_uint32,          # OptionBits inOptions
+            ctypes.POINTER(void_p),   # EventHotKeyRef *outRef
+        ]
+
+        carbon.UnregisterEventHotKey.restype = ctypes.c_int32
+        carbon.UnregisterEventHotKey.argtypes = [void_p]
+
+        carbon.GetEventParameter.restype = ctypes.c_int32
+        carbon.GetEventParameter.argtypes = [
+            void_p,                                 # EventRef inEvent
+            ctypes.c_uint32,                        # EventParamName inName
+            ctypes.c_uint32,                        # EventParamType inDesiredType
+            void_p,                                 # EventParamType *outActualType
+            ctypes.c_ulong,                         # ByteCount inBufferSize
+            void_p,                                 # ByteCount *outActualSize
+            ctypes.POINTER(self._EventHotKeyID),    # void *outData
+        ]
+
     def _install_handler(self) -> None:
         ctypes = self._ctypes
-        EventTypeSpec, EventHotKeyID = self._structs()
-
-        HANDLER = ctypes.CFUNCTYPE(
-            ctypes.c_int32, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p
-        )
+        EventHotKeyID = self._EventHotKeyID
 
         def _on_event(next_handler, event, user_data):
             try:
                 hk_id = EventHotKeyID()
                 self._carbon.GetEventParameter(
                     event,
-                    ctypes.c_uint32(_K_EVENT_PARAM_DIRECT_OBJECT),
-                    ctypes.c_uint32(_TYPE_EVENT_HOTKEY_ID),
+                    _K_EVENT_PARAM_DIRECT_OBJECT,
+                    _TYPE_EVENT_HOTKEY_ID,
                     None,
-                    ctypes.c_uint32(ctypes.sizeof(hk_id)),
+                    ctypes.sizeof(hk_id),
                     None,
                     ctypes.byref(hk_id),
                 )
@@ -450,38 +508,39 @@ class _CarbonBackend:
                 pass  # never let a Python error escape into Carbon
             return _NO_ERR
 
-        self._callback = HANDLER(_on_event)
-        spec = (EventTypeSpec * 1)()
+        self._callback = self._HANDLER(_on_event)
+        spec = (self._EventTypeSpec * 1)()
         (event_class, event_kind), = subscribed_events()
         spec[0].eventClass = event_class
         spec[0].eventKind = event_kind
 
         handler_ref = ctypes.c_void_p()
         target = self._carbon.GetApplicationEventTarget()
-        self._carbon.InstallEventHandler(
+        status = self._carbon.InstallEventHandler(
             target, self._callback, 1, spec, None, ctypes.byref(handler_ref)
         )
+        if status != _NO_ERR:
+            # Without the handler, RegisterEventHotKey would still succeed and the
+            # shortcut would simply never fire — a dead key with a green light.
+            raise HotkeyError(
+                f"macOS refused the hotkey event handler (OSStatus {status})",
+                status=status,
+            )
         self._handler_ref = handler_ref
 
     def register(self, keycode: int, modifiers: int, on_trigger: Callable[[], None]):
         ctypes = self._ctypes
-        _, EventHotKeyID = self._structs()
         hotkey_id = self._next_id
         self._next_id += 1
 
-        hk_id = EventHotKeyID()
+        hk_id = self._EventHotKeyID()
         hk_id.signature = _HOTKEY_SIGNATURE
         hk_id.id = hotkey_id
 
         ref = ctypes.c_void_p()
         target = self._carbon.GetApplicationEventTarget()
         status = self._carbon.RegisterEventHotKey(
-            ctypes.c_uint32(keycode),
-            ctypes.c_uint32(modifiers),
-            hk_id,
-            target,
-            0,
-            ctypes.byref(ref),
+            keycode, modifiers, hk_id, target, 0, ctypes.byref(ref)
         )
         if status == _NO_ERR:
             self._triggers[hotkey_id] = on_trigger

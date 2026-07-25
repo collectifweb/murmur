@@ -225,5 +225,93 @@ class DispatcherTest(unittest.TestCase):
         self.assertTrue(closed.wait(2.0))    # once toggle returns, close returns
 
 
+class _FakeCarbonFunction:
+    """A C function that records what was declared for it and returns ``result``."""
+
+    def __init__(self):
+        self.restype = None
+        self.argtypes = None
+        self.result = 0
+
+    def __call__(self, *args):
+        return self.result
+
+
+class _FakeCarbon:
+    """Stands in for the Carbon shared library, one fake function per name."""
+
+    def __init__(self):
+        self._functions = {}
+
+    def __getattr__(self, name):
+        return self._functions.setdefault(name, _FakeCarbonFunction())
+
+
+class CarbonBackendSignatureTest(unittest.TestCase):
+    """The declarations whose absence segfaulted Big Sur (M8).
+
+    The backend needs a Mac to *run*, but what it declares to ctypes is plain
+    data a fake library can record. Undeclared, ctypes assumes 32-bit ints:
+    ``GetApplicationEventTarget`` returned a pointer cut in half and Carbon
+    crashed on it before the first registration. These tests are the only guard
+    that exists off a Mac.
+    """
+
+    def _build(self, carbon=None):
+        import ctypes
+
+        carbon = carbon or _FakeCarbon()
+        with mock.patch.object(ctypes, "CDLL", return_value=carbon):
+            backend = macos_hotkey._CarbonBackend()
+        return backend, carbon
+
+    def test_the_pointer_returning_call_declares_a_pointer_restype(self):
+        import ctypes
+
+        _, carbon = self._build()
+        self.assertIs(carbon.GetApplicationEventTarget.restype, ctypes.c_void_p)
+
+    def test_the_count_arguments_are_declared_sixty_four_bit(self):
+        import ctypes
+
+        _, carbon = self._build()
+        # ItemCount and ByteCount are unsigned long on 64-bit macOS, not UInt32.
+        self.assertIs(carbon.InstallEventHandler.argtypes[2], ctypes.c_ulong)
+        self.assertIs(carbon.GetEventParameter.argtypes[4], ctypes.c_ulong)
+
+    def test_every_carbon_call_declares_its_signature(self):
+        _, carbon = self._build()
+        for name in (
+            "GetApplicationEventTarget",
+            "InstallEventHandler",
+            "RegisterEventHotKey",
+            "UnregisterEventHotKey",
+            "GetEventParameter",
+        ):
+            function = getattr(carbon, name)
+            self.assertIsNotNone(function.restype, name)
+            self.assertIsNotNone(function.argtypes, name)
+
+    def test_the_struct_classes_are_shared_with_the_declared_signatures(self):
+        # Rebuilding a Structure subclass per call would make ctypes reject the
+        # very argument the signature was declared for.
+        backend, carbon = self._build()
+        self.assertIs(
+            carbon.RegisterEventHotKey.argtypes[2], backend._EventHotKeyID
+        )
+        self.assertIs(
+            carbon.InstallEventHandler.argtypes[3]._type_, backend._EventTypeSpec
+        )
+
+    def test_a_refused_event_handler_raises_instead_of_going_silent(self):
+        # A hotkey registered without its handler is a dead key with a green
+        # light: RegisterEventHotKey succeeds and nothing ever fires.
+        carbon = _FakeCarbon()
+        carbon.InstallEventHandler.result = -50
+        with self.assertRaises(HotkeyError) as caught:
+            self._build(carbon)
+        self.assertEqual(caught.exception.status, -50)
+
+
 if __name__ == "__main__":
     unittest.main()
