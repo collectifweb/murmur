@@ -1096,3 +1096,37 @@ si le résultat te déplaît sous Cinnamon, une seule ligne à changer :
       mouvement réduit).
 - [x] `CHANGELOG.md` : entrées sous `[Unreleased]`.
 
+
+## Micro qui restait ouvert (24/07, hors lots)
+
+Signalé après deux dictées perdues le même jour : « la notif de dictée se met,
+mais après traitement : rien ».
+
+- [x] Diagnostic : deux `.wav` de 300 s pile abandonnés dans le dossier
+      d'exécution (09:21:55 et 23:37:04), la voix d'Alexandre dedans, et aucune
+      entrée d'historique après 16:34. Cause reproduite : le démarrage se
+      déclarait réussi 0,001 s après `Popen`, alors qu'un micro déjà tenu ne fait
+      sortir `arecord` qu'à 0,02-0,05 s. L'appui censé arrêter ne trouvait plus
+      de session et rouvrait le micro jusqu'au plafond de 5 minutes.
+- [x] `_capture_confirmed()` : le démarrage attend le premier échantillon écrit,
+      ou la mort du processus. Encore vivant au bout de 0,75 s → accepté, parce
+      qu'un micro lent vaut mieux qu'une dictée refusée.
+- [x] Échec de démarrage notifié en `critical` depuis `toggle_dictation` :
+      `main()` n'écrivait que sur `stderr`, que Cinnamon jette.
+- [x] Tests : la régression du démarrage annoncé à tort, les trois cas de
+      `_capture_confirmed`, et la notification d'échec côté ligne de commande.
+
+Vérifié en vrai. Micro occupé par un autre `arecord` : refus en 0,021 s, rien
+laissé derrière, l'appui suivant retrouve « idle ». Micro libre : démarrage
+confirmé en 0,182 s, arrêt propre à 1,25 s captées.
+
+**Deux causes distinctes dans le même signalement.** La lenteur (15-20 s) n'était
+pas ce bogue : le pilote NVIDIA a été mis à jour le 23/07 à 11:02 sans
+redémarrage, donc le module noyau (535.309.01) et les bibliothèques (580.173.02)
+ne correspondent plus, `ctranslate2` ne voit aucune carte et Whisper tourne sur
+le processeur — mesuré 3,1 s pour 10 s de parole, soit ~18 s pour une dictée
+d'une minute. Un redémarrage la règle ; rien à corriger dans le code.
+
+**Reste ouvert.** Un enregistreur qui meurt *en cours* de dictée avec moins de
+0,3 s capté fait toujours de l'appui suivant un nouveau départ silencieux. Pas
+observé, pas traité.

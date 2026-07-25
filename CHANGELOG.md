@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **A dictation is only announced once the microphone is really captured.**
+  `Popen` returns as soon as `arecord` is executed — measured at 0.001 s — but a
+  hardware device already held by another application only makes `arecord` exit
+  0.02 to 0.05 s later, and the first sample lands at 0.17 s. Checking liveness
+  immediately therefore announced "Recording" for a recorder that was already
+  dead. The press meant to stop it then found no session, took itself for a fresh
+  start, and left the microphone open for a whole recording that nothing could
+  stop — until the five-minute ceiling. Two 300-second captures were lost that
+  way on 2026-07-24, with speech in them. The start now waits for the first
+  sample written, or for the process to die; a recorder still alive after the
+  delay keeps the benefit of the doubt, because a slow microphone is better than
+  a refused dictation.
+- **A refused start is now visible.** It only ever went to `stderr`, which a
+  desktop keyboard shortcut has nobody to read — Cinnamon discards it. A failed
+  start now raises a `critical` notification, as a failed insertion already did.
 
 ## [1.1.1] - 2026-07-23
 

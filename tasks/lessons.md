@@ -52,3 +52,19 @@ jamais sur l'architecture. Nommer les choses par leur effet : « le programme
 d'arrière-plan » et non « le serveur », « le raccourci clavier » et non « le
 chemin CLI ». Si une option ne peut pas se décrire sans son nom de code, c'est
 qu'elle n'est pas encore assez comprise pour être proposée.
+
+---
+
+## Simuler la vivacité d'un processus comme une vérité instantanée
+
+**24/07.** Le démarrage de dictée annonçait « Dictée en cours » à un `arecord`
+déjà mort, et deux dictées ont été perdues. La suite de tests couvrait pourtant
+ce cas — mais en remplaçant `_recorder_alive` par un booléen figé, donc en
+supprimant la seule chose qui cassait : le temps réel entre l'`exec` et l'échec
+du processus.
+
+**Règle.** Quand un code dépend d'une course entre deux processus, un test qui
+remplace la mesure par une constante ne teste plus la course. Mesurer d'abord la
+vraie chronologie (ici : `Popen` rend la main à 0,001 s, arecord refuse à
+0,02-0,05 s, premier échantillon à 0,17 s), puis écrire le test contre ces
+chiffres — au minimum une séquence qui change de valeur, jamais un `return_value`.

@@ -161,6 +161,18 @@ phrases voisines.
   processus de quelqu'un d'autre, et `killpg` enverrait un `SIGINT` à tout son
   groupe. Deux signatures : `arecord`, et le chemin du fichier — unique par
   session.
+- **Un démarrage s'annonce quand la capture est prouvée, pas quand `Popen` rend
+  la main.** `Popen` revient dès l'`exec` — 0,001 s mesuré — alors qu'un
+  `-D plughw:` déjà tenu par une autre application ne fait sortir `arecord` qu'à
+  0,02-0,05 s, et que le premier échantillon n'arrive qu'à 0,17 s. Contrôler la
+  vivacité tout de suite annonçait donc « Dictée en cours » à un enregistreur
+  déjà mort ; l'appui censé arrêter ne trouvait plus de session et **rouvrait le
+  micro pour un enregistrement entier**, que plus rien n'arrêtait. Deux captures
+  de 300 s, avec la voix de l'utilisateur dedans, ont été perdues comme ça le
+  24/07. `_capture_confirmed()` attend le premier échantillon écrit, ou la mort du
+  processus ; encore vivant au bout du délai, il garde le bénéfice du doute — un
+  micro lent vaut mieux qu'une dictée refusée. Et l'échec **se notifie** depuis
+  `toggle_dictation` : `main()` n'écrit que sur `stderr`, que Cinnamon jette.
 - **Processus mort + audio ≥ 0,3 s = session à transcrire, pas session
   périmée.** Supprimer ce `.wav` détruirait l'enregistrement à la seconde même
   où l'utilisateur appuie pour le récupérer.

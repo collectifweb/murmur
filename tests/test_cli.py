@@ -81,6 +81,42 @@ class StopDictationTest(unittest.TestCase):
         self.assertEqual(failure.kwargs["urgency"], "critical")
 
 
+class StartDictationTest(unittest.TestCase):
+    """Ce que le raccourci annonce quand il ouvre le micro — et quand il échoue."""
+
+    def _run(self, start_raises: Exception | None = None):
+        recording = mock.Mock(audio_path=Path("/tmp/aparte-test.wav"))
+        with mock.patch.object(cli, "get_active_session", return_value=None):
+            with mock.patch.object(
+                cli,
+                "start_toggle_recording",
+                side_effect=start_raises,
+                return_value=recording,
+            ):
+                with mock.patch.object(cli, "notify") as notify:
+                    error = None
+                    try:
+                        cli.toggle_dictation(_toggle_args(), Settings())
+                    except Exception as exc:  # noqa: BLE001 - rendu à l'appelant
+                        error = exc
+        return notify, error
+
+    def test_a_started_recording_is_announced(self):
+        notify, error = self._run()
+        self.assertIsNone(error)
+        self.assertIn("Dictée en cours", notify.call_args.args[0])
+
+    def test_a_microphone_that_stays_shut_is_announced_too(self):
+        """Sans cette notification, un démarrage refusé est un appui muet : on
+        parle dans le vide, puis l'appui censé arrêter ouvre le micro pour de
+        bon."""
+        notify, error = self._run(cli.RecordingError("Could not start recording."))
+        self.assertIsInstance(error, cli.RecordingError)
+        self.assertIn("non démarrée", notify.call_args.args[0])
+        self.assertEqual(notify.call_args.kwargs["urgency"], "critical")
+        self.assertNotIn("Dictée en cours", str(notify.call_args_list))
+
+
 class CliParserTest(unittest.TestCase):
     def test_dictate_defaults_to_paste_and_polish(self):
         args = build_parser().parse_args(["dictate"])

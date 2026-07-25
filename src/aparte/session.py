@@ -33,6 +33,14 @@ _ARECORD_WAV_HEADER_BYTES = 44
 # Whisper fabrique du texte sur trois millisecondes de bruit comme sur du silence.
 MIN_TRANSCRIBABLE_SECONDS = 0.3
 
+# Le délai qu'on laisse à `arecord` pour prouver qu'il capte vraiment. Mesuré sur
+# un micro USB : `Popen` rend la main dès l'exec (0,001 s), le fichier apparaît à
+# 0,04 s et le premier échantillon à 0,17 s — mais un `-D plughw:` déjà tenu par
+# une autre application ne fait sortir arecord qu'à 0,02-0,05 s. Décider avant,
+# c'est annoncer une dictée à un enregistreur déjà condamné.
+_START_CONFIRMATION_SECONDS = 0.75
+_START_POLL_SECONDS = 0.02
+
 
 def get_runtime_dir() -> Path:
     override = os.getenv("APARTE_RUNTIME_DIR")
@@ -181,6 +189,26 @@ def _stop_recorder(session: RecordingSession, number: int = signal.SIGINT) -> No
         raise ToggleSessionError(f"Cannot stop recording process {session.pid}: {exc}") from exc
 
 
+def _capture_confirmed(session: RecordingSession) -> bool:
+    """Attendre qu'`arecord` prouve qu'il capte, ou qu'il meure sans avoir capté.
+
+    Le premier échantillon écrit est la seule preuve qu'il a obtenu le micro : un
+    périphérique matériel déjà tenu par une autre application le fait sortir sans
+    en écrire un seul, et sur une sortie d'erreur qu'on jette. Un enregistreur
+    encore vivant au bout du délai est accepté — mieux vaut annoncer un micro lent
+    qu'une dictée refusée.
+    """
+    deadline = time.monotonic() + _START_CONFIRMATION_SECONDS
+    while True:
+        if _captured_seconds(session) > 0.0:
+            return True
+        if not _recorder_alive(session):
+            return False
+        if time.monotonic() >= deadline:
+            return True
+        time.sleep(_START_POLL_SECONDS)
+
+
 def start_toggle_recording(
     sample_rate: int = 16000,
     device: str | None = None,
@@ -231,7 +259,7 @@ def start_toggle_recording(
         _stop_recorder(session)
         audio_path.unlink(missing_ok=True)
         raise ToggleSessionError("Recording is already active.")
-    if not _recorder_alive(session):
+    if not _capture_confirmed(session):
         # Gagner la course avec un enregistreur déjà mort annoncerait une dictée
         # qui n'a jamais commencé. arecord écrit son refus sur une sortie qu'on
         # jette : c'est ici, et seulement ici, qu'il peut devenir visible.

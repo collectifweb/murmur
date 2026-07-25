@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from . import history
-from .audio import play_beep, record_wav
+from .audio import RecordingError, play_beep, record_wav
 from .clipboard import copy_text, paste_text
 from .config import Settings, load_config, write_default_config
 from .desktop import run_desktop, transcribe_via_running_app
@@ -342,9 +342,21 @@ def toggle_dictation(args: argparse.Namespace, settings: Settings) -> str:
     if not active:
         if settings.beep:
             play_beep("start")
-        session = start_toggle_recording(
-            args.sample_rate, settings.microphone, settings.max_recording_seconds
-        )
+        try:
+            session = start_toggle_recording(
+                args.sample_rate, settings.microphone, settings.max_recording_seconds
+            )
+        except RecordingError as exc:
+            # Un raccourci clavier n'a personne pour lire `stderr` — Cinnamon le
+            # jette. Sans cette notification, un démarrage refusé est un appui qui
+            # n'a rien fait : l'appui suivant, celui qui croit arrêter, ne trouve
+            # plus de session et ouvre le micro pour un enregistrement entier.
+            notify(
+                "⚠️ Dictée non démarrée",
+                f"{exc} Rien n'enregistre — réappuie pour réessayer.",
+                urgency="critical",
+            )
+            raise
         notify("🎙️ Dictée en cours", "Réappuie sur le raccourci pour arrêter et insérer.")
         return f"Recording started: {session.audio_path}"
 

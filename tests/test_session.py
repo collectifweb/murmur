@@ -23,9 +23,12 @@ def _started_recorder(directory: str, pid: int = 4242, alive: bool = True):
     with mock.patch.dict(os.environ, {"APARTE_RUNTIME_DIR": directory}):
         with mock.patch.object(session.shutil, "which", return_value="/usr/bin/arecord"):
             with mock.patch.object(session, "_recorder_alive", return_value=alive):
-                with mock.patch.object(session.subprocess, "Popen") as popen:
-                    popen.return_value.pid = pid
-                    yield popen
+                # Aucun arecord simulé n'écrit d'échantillon : sans ce délai à zéro,
+                # chaque test attendrait la confirmation de capture jusqu'au bout.
+                with mock.patch.object(session, "_START_CONFIRMATION_SECONDS", 0.0):
+                    with mock.patch.object(session.subprocess, "Popen") as popen:
+                        popen.return_value.pid = pid
+                        yield popen
 
 
 def _wav_with_placeholder_header(path: Path, payload_bytes: int, sample_rate: int = 16000) -> None:
@@ -92,6 +95,27 @@ class StartRecordingTest(unittest.TestCase):
                 self.assertFalse(state.exists())
                 self.assertFalse(audio_path.exists())
 
+    def test_a_recorder_that_dies_moments_after_exec_is_reported(self):
+        """Le cas qui coûtait une dictée entière.
+
+        `Popen` rend la main dès l'exec — 0,001 s — alors qu'un micro déjà tenu par
+        une autre application ne fait sortir arecord qu'à 0,05 s. Contrôler la
+        vivacité tout de suite le voyait vivant, donc annonçait « Dictée en cours »
+        à un enregistreur mort ; l'appui censé arrêter ne trouvait plus de session
+        et rouvrait le micro pour un enregistrement entier, que plus rien
+        n'arrêtait.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            with _started_recorder(directory) as popen:
+                with mock.patch.object(session, "_START_CONFIRMATION_SECONDS", 0.1):
+                    with mock.patch.object(
+                        session, "_recorder_alive", side_effect=[True, False]
+                    ):
+                        with self.assertRaises(session.RecordingError):
+                            session.start_toggle_recording()
+                self.assertFalse(session.get_session_path().exists())
+                self.assertFalse(Path(popen.call_args.args[0][-1]).exists())
+
     def test_old_temporaries_are_swept_but_fresh_ones_are_left_alone(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "toggle-session.json"
@@ -155,6 +179,38 @@ class RecorderAliveTest(unittest.TestCase):
             started_at=1.0,
         )
         self.assertFalse(session._recorder_alive(gone))
+
+
+class CaptureConfirmedTest(unittest.TestCase):
+    def _session(self, audio_path: Path) -> session.RecordingSession:
+        return session.RecordingSession(
+            pid=DEAD_PID, audio_path=audio_path, sample_rate=16000, started_at=1.0
+        )
+
+    def test_a_first_sample_confirms_without_consulting_proc(self):
+        """Un échantillon écrit prouve qu'arecord a bien obtenu le micro."""
+        with tempfile.TemporaryDirectory() as directory:
+            audio_path = Path(directory) / "toggle.wav"
+            _wav_with_placeholder_header(audio_path, payload_bytes=320)
+            with mock.patch.object(session, "_recorder_alive") as alive:
+                self.assertTrue(session._capture_confirmed(self._session(audio_path)))
+        alive.assert_not_called()
+
+    def test_a_recorder_that_never_captures_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            audio_path = Path(directory) / "toggle.wav"
+            with mock.patch.object(session, "_START_CONFIRMATION_SECONDS", 0.1):
+                with mock.patch.object(session, "_recorder_alive", side_effect=[True, False]):
+                    self.assertFalse(session._capture_confirmed(self._session(audio_path)))
+
+    def test_a_slow_recorder_still_alive_is_accepted(self):
+        """Au bout du délai, un enregistreur vivant garde le bénéfice du doute :
+        refuser un micro lent perdrait des dictées que rien n'empêchait."""
+        with tempfile.TemporaryDirectory() as directory:
+            audio_path = Path(directory) / "toggle.wav"
+            with mock.patch.object(session, "_START_CONFIRMATION_SECONDS", 0.0):
+                with mock.patch.object(session, "_recorder_alive", return_value=True):
+                    self.assertTrue(session._capture_confirmed(self._session(audio_path)))
 
 
 class CapturedSecondsTest(unittest.TestCase):
