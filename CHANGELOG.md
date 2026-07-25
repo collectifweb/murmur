@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.1.2] - 2026-07-25
+
 ### Fixed
 
 - **A dictation is only announced once the microphone is really captured.**
@@ -474,7 +478,8 @@ First public release — a local-first dictation app for Linux.
 - MIT license, contributing guide, and CI running the test suite on Python
   3.10–3.13.
 
-[Unreleased]: https://github.com/collectifweb/aparte/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/collectifweb/aparte/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/collectifweb/aparte/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/collectifweb/aparte/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/collectifweb/aparte/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/collectifweb/aparte/compare/v1.0.0...v1.0.1
