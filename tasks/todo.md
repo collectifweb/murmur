@@ -1192,6 +1192,29 @@ enregistrement alors que le code était correct. **M6 devient prioritaire.**
 **Dette repérée** : `quickmachotkey` est dans l'extra `macos` et n'est jamais
 importé (le pont Carbon est en `ctypes`) — à retirer.
 
+### M7 — l'installation Mac doit être SIMPLE (posé par Alexandre le 25/07)
+
+**Contrainte de produit, pas de confort.** Les utilisateurs Mac attendent la
+simplicité ; l'installation doit viser **télécharger → glisser dans Applications
+→ ouvrir → accorder deux autorisations**. Rien d'autre.
+
+Ce que M8 a exigé pour tourner est exactement le contraire, et sert de repoussoir :
+Python 3.11 de python.org, archive, environnement virtuel, `pip --prefer-binary`,
+500 Mo de modèle, tout en ligne de commande.
+
+Deux points à trancher **avant** de concevoir M7 :
+
+- **Signature et notarisation Apple.** Sans elles, Gatekeeper bloque l'application
+  et le contournement (clic droit → Ouvrir) ruine la promesse. Cela suppose un
+  compte développeur Apple payant. **Question ouverte pour Alexandre.**
+- **Le modèle Whisper** (~500 Mo) : embarqué dans le bundle, ou téléchargé au
+  premier lancement avec une barre de progression ? Le premier alourdit le
+  téléchargement, le second demande du réseau à un moment sensible.
+
+Bénéfice de correction qui vient avec le bundle, découvert en M8 : aujourd'hui
+**toutes les autorisations macOS sont accordées à Terminal**, pas à Aparté. Un
+vrai bundle rend le modèle de permissions honnête et lisible.
+
 ### Windows, pour mémoire (étudié le 23/07, non planifié)
 
 Réécriture partielle, ~15–21 jours, ~le double de Mac. Aucun modèle Unix de
