@@ -40,7 +40,7 @@ import wave
 from pathlib import Path
 from typing import Callable
 
-from .audio import RecordingError, play_beep
+from .audio import RecordingError, ensure_microphone_access, play_beep
 from .notify import notify
 
 # The four observable states. The tray (M6) and doctor read the current one
@@ -191,6 +191,11 @@ class RecordingController:
     def _start_locked(self) -> None:
         settings = self._settings_provider()
         sd = _sounddevice()
+        # Before the stream, never after: PortAudio opens without asking and would
+        # capture silence (M8). The wait for the dialog happens under the lock, but
+        # only on the very first recording of an install — past that the status is
+        # known and this returns at once.
+        ensure_microphone_access()
         max_frames = max(1, self._sample_rate * int(settings.max_recording_seconds))
         capture = _Capture(max_frames)
 

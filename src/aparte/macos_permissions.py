@@ -48,6 +48,50 @@ def microphone_authorization() -> str:
         return "unknown"
 
 
+# How long the microphone dialog is waited on. It only ever shows up while the
+# status is "not_determined" — once per install — so this bound is never paid twice.
+_MIC_PROMPT_TIMEOUT = 30.0
+
+
+def request_microphone_access(timeout: float = _MIC_PROMPT_TIMEOUT) -> str:
+    """Ask for the microphone and **wait** for the answer, returning the new status.
+
+    Unlike :func:`microphone_authorization`, this one prompts. It exists because
+    opening a PortAudio input stream does *not* trigger the TCC dialog: measured
+    on Big Sur (M8), the stream opens without error and records pure silence
+    while the status stays ``"not_determined"``. AVFoundation is the only thing
+    that asks, so the app has to ask for itself before capturing.
+
+    Waiting matters as much as asking: the dialog is answered asynchronously, and
+    returning early would capture the silence this call exists to prevent. Never
+    raises — an unreachable framework degrades to the status we already had."""
+    status = microphone_authorization()
+    if status != "not_determined":
+        # macOS shows the dialog once; asking again when denied returns instantly
+        # and would only add a pointless wait.
+        return status
+    try:
+        import threading
+
+        import AVFoundation
+    except Exception:
+        return status
+
+    answered = threading.Event()
+
+    def _completion(granted) -> None:  # called on an arbitrary dispatch queue
+        answered.set()
+
+    try:
+        AVFoundation.AVCaptureDevice.requestAccessForMediaType_completionHandler_(
+            AVFoundation.AVMediaTypeAudio, _completion
+        )
+    except Exception:
+        return microphone_authorization()
+    answered.wait(timeout)
+    return microphone_authorization()
+
+
 def accessibility_trusted() -> bool | None:
     """Whether this process is trusted for Accessibility (needed to synthesise
     the Cmd+V paste in M3). ``True``/``False`` when known, ``None`` when the API

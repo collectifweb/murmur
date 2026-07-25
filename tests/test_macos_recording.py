@@ -255,6 +255,36 @@ class MissingFrameworkTest(ControllerTestBase):
         self.assertEqual(self.controller.state, ERROR)
 
 
+class MicrophonePermissionTest(ControllerTestBase):
+    """A refused microphone must stop the recording before it opens.
+
+    PortAudio would open the stream anyway and capture silence — that is what a
+    fresh Mac did in M8. The refusal has to happen *before* the stream, and be
+    observable, rather than produce a recording of nothing.
+    """
+
+    def test_a_refused_microphone_never_opens_a_stream(self):
+        with mock.patch.object(
+            macos_recording, "ensure_microphone_access",
+            side_effect=macos_recording.RecordingError("no mic"),
+        ):
+            self.controller.toggle()
+        self.assertEqual(self.sd.streams, [])
+        self.assertEqual(self.controller.state, ERROR)
+        self.assertEqual(self.notify.call_args.kwargs.get("urgency"), "critical")
+
+    def test_the_permission_is_settled_before_the_stream_is_built(self):
+        order: list[str] = []
+        with mock.patch.object(
+            macos_recording, "ensure_microphone_access", side_effect=lambda: order.append("ask")
+        ):
+            with mock.patch.object(
+                self.sd, "RawInputStream", side_effect=lambda **kw: order.append("stream")
+            ):
+                self.controller.toggle()
+        self.assertEqual(order, ["ask", "stream"])
+
+
 class WavTest(ControllerTestBase):
     def test_the_wav_is_16k_mono_16bit_and_holds_the_frames(self):
         path = self.controller._write_wav([b"\x01\x02", b"\x03\x04"])

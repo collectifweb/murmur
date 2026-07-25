@@ -89,6 +89,61 @@ class OpenAccessibilitySettingsTest(unittest.TestCase):
             self.assertFalse(macos_permissions.open_accessibility_settings())
 
 
+class RequestMicrophoneAccessTest(unittest.TestCase):
+    """The prompt PortAudio never triggers.
+
+    Measured on Big Sur (M8): opening an input stream while the status is
+    "not_determined" records silence without asking anything. AVFoundation is
+    what asks, and the answer has to be waited for — returning early would
+    capture the very silence this call prevents.
+    """
+
+    def _with_avfoundation(self, before, after, *, answers=True):
+        """A fake AVFoundation whose status flips once the completion handler runs."""
+        statuses = iter([before] + [after] * 20)
+        fake = mock.Mock()
+        fake.AVMediaTypeAudio = "soun"
+        fake.AVCaptureDevice.authorizationStatusForMediaType_.side_effect = lambda _: next(statuses)
+
+        def request(_media, completion):
+            if answers:
+                completion(True)
+
+        fake.AVCaptureDevice.requestAccessForMediaType_completionHandler_.side_effect = request
+        return fake, mock.patch.dict(sys.modules, {"AVFoundation": fake})
+
+    def test_an_undetermined_status_prompts_and_returns_the_answer(self):
+        fake, patched = self._with_avfoundation(0, 3)  # not_determined → authorized
+        with patched:
+            self.assertEqual(macos_permissions.request_microphone_access(), "authorized")
+        fake.AVCaptureDevice.requestAccessForMediaType_completionHandler_.assert_called_once()
+
+    def test_a_refusal_comes_back_as_denied(self):
+        fake, patched = self._with_avfoundation(0, 2)  # not_determined → denied
+        with patched:
+            self.assertEqual(macos_permissions.request_microphone_access(), "denied")
+
+    def test_an_already_settled_status_never_prompts(self):
+        # macOS shows the dialog once; asking again would only add a pointless wait.
+        for status, name in [(3, "authorized"), (2, "denied"), (1, "restricted")]:
+            fake, patched = self._with_avfoundation(status, status)
+            with patched:
+                self.assertEqual(macos_permissions.request_microphone_access(), name)
+            fake.AVCaptureDevice.requestAccessForMediaType_completionHandler_.assert_not_called()
+
+    def test_an_unanswered_dialog_gives_up_on_the_timeout(self):
+        # The user walked away: bounded wait, then report what we know.
+        fake, patched = self._with_avfoundation(0, 0, answers=False)
+        with patched:
+            self.assertEqual(
+                macos_permissions.request_microphone_access(timeout=0.01), "not_determined"
+            )
+
+    def test_a_missing_framework_degrades_instead_of_raising(self):
+        with mock.patch.dict(sys.modules, {"AVFoundation": None}):
+            self.assertEqual(macos_permissions.request_microphone_access(), "unknown")
+
+
 class GuideAccessibilityOnceTest(unittest.TestCase):
     """Prompt + open Settings, but at most once per process — a user who declines
     on purpose must not be nagged on every failed insertion."""

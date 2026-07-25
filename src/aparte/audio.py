@@ -71,6 +71,31 @@ def _list_microphones_sounddevice() -> list[dict[str, str]]:
     return microphones
 
 
+def ensure_microphone_access() -> None:
+    """Make sure macOS granted the microphone **before** a stream is opened.
+
+    Opening a PortAudio input stream does not ask for the permission: on a Mac
+    that has never been asked, the stream opens happily and records silence, with
+    no error and no dialog (measured on Big Sur, M8 — the first dictation of a
+    fresh install looked like a broken app). So we ask through AVFoundation and
+    refuse to record rather than deliver silence.
+
+    A no-op off macOS, and a no-op once the permission is granted."""
+    if not is_macos():
+        return
+    from .macos_permissions import request_microphone_access
+
+    status = request_microphone_access()
+    if status in ("authorized", "unknown"):
+        # "unknown" means AVFoundation could not answer: never block a recording
+        # on a probe that failed — the capture itself will tell.
+        return
+    raise RecordingError(
+        "macOS has not granted Aparté the microphone. Allow it in System "
+        "Settings → Privacy & Security → Microphone, then record again."
+    )
+
+
 def record_wav(
     seconds: float,
     sample_rate: int = 16000,
@@ -119,6 +144,7 @@ def _record_wav_sounddevice(seconds: float, sample_rate: int, device: str | None
             'Install with: python -m pip install -e ".[recording]"'
         ) from exc
 
+    ensure_microphone_access()
     frames = int(seconds * sample_rate)
     data = sd.rec(frames, samplerate=sample_rate, channels=1, dtype="int16", device=device or None)
     sd.wait()

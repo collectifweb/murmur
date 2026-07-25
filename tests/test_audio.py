@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from aparte import audio
+from aparte import audio, macos_permissions
 
 ARECORD_L = """null
     Discard all samples (playback) or generate zero samples (capture)
@@ -139,6 +139,46 @@ class MacBackendTest(unittest.TestCase):
                     audio.record_wav(2.0, device="USB Mic")
         sounddevice.assert_called_once_with(2.0, 16000, "USB Mic")
         arecord.assert_not_called()
+
+
+class EnsureMicrophoneAccessTest(unittest.TestCase):
+    """The guard between « the stream opens » and « the stream records something ».
+
+    On macOS, PortAudio opens an input stream without ever asking for the
+    permission and captures pure silence — measured on Big Sur in M8. So the
+    recorder asks first, and refuses out loud instead of delivering silence.
+    """
+
+    def _asking_returns(self, status, *, macos=True):
+        return (
+            mock.patch.object(audio, "is_macos", return_value=macos),
+            mock.patch.object(macos_permissions, "request_microphone_access", return_value=status),
+        )
+
+    def test_off_macos_it_asks_nothing(self):
+        on_macos, asking = self._asking_returns("denied", macos=False)
+        with on_macos, asking as ask:
+            audio.ensure_microphone_access()   # must not raise
+        ask.assert_not_called()
+
+    def test_a_granted_microphone_lets_the_recording_through(self):
+        on_macos, asking = self._asking_returns("authorized")
+        with on_macos, asking as ask:
+            audio.ensure_microphone_access()
+        ask.assert_called_once()
+
+    def test_a_refused_microphone_raises_instead_of_recording_silence(self):
+        for status in ("denied", "restricted", "not_determined"):
+            on_macos, asking = self._asking_returns(status)
+            with on_macos, asking:
+                with self.assertRaises(audio.RecordingError):
+                    audio.ensure_microphone_access()
+
+    def test_an_unreachable_probe_never_blocks_a_recording(self):
+        # "unknown" means AVFoundation could not answer, not that it said no.
+        on_macos, asking = self._asking_returns("unknown")
+        with on_macos, asking:
+            audio.ensure_microphone_access()
 
 
 if __name__ == "__main__":
