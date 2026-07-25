@@ -1,132 +1,200 @@
-# M8 — Validation native macOS (smoke suite manuelle)
+# M8 — Validation native macOS : résultats
 
-Tout le portage macOS (M0–M7) est **prouvé sous Linux par tests mockés** : PyObjC,
-Carbon et PortAudio n'y existent pas. M8 est la seule étape qui prouve le
-comportement **réel**, et elle est **manuelle** — un humain devant un vrai Mac.
+**Exécuté le 25/07/2026 sur macOS 11.7.11 (Big Sur), Intel x86_64, Python 3.11.9.**
 
-Un runner CI macOS ne suffit pas : il ne peut ni accorder une permission TCC, ni
-capter un raccourci clavier global, ni donner le focus à une autre application.
-Ces trois choses exigent une session interactive.
+Tout le portage macOS (M0–M7) était **prouvé sous Linux par tests mockés** : PyObjC,
+Carbon et PortAudio n'y existent pas. M8 était la seule étape à prouver le
+comportement **réel**, et elle est manuelle — un humain devant un vrai Mac.
 
-## Prérequis
+Elle a trouvé **un plantage**, **trois défauts**, et **invalidé une hypothèse du
+plan lui-même**. Aucun ne pouvait être vu sous Linux.
 
-- Un Mac (noter la version : **Sequoia 15** a changé des réservations de
-  raccourcis — vérifier ⌃⌥D en priorité ; **Sonoma 14** ou avant : réservations
-  différentes).
-- Clone du dépôt, puis `pip install -e ".[macos]"`.
-- Quitter toute instance d'Aparté déjà lancée avant les tests de raccourci (le
-  serveur résident détiendrait déjà la combinaison — un second inscripteur
-  échouerait, ce qui fausserait la lecture).
+---
 
-## Les deux mesures ouvertes (elles décident du code)
+## Ce que la machine a exigé (à savoir avant de recommencer)
 
-Le plan M5 a laissé deux points à trancher **par observation**, pas par
-raisonnement :
+Big Sur est plus vieux que ce que le plan visait (Sequoia/Sonoma). Conséquences :
 
-1. **Un appui physique = un ou plusieurs événements « pressé » ?** Décide s'il faut
-   restreindre la portée du debounce. La façade s'abonne au seul `kEventHotKeyPressed` ;
-   si un appui unique en produit plusieurs, on le saura ici.
-2. **⌃⌥D est-elle libre sur cette machine/version ?** `OSStatus` réel de
-   `RegisterEventHotKey`.
+- **Python 3.10+ doit être installé** : Big Sur livre 3.8. L'installateur
+  universal2 de python.org (`python-3.11.9-macos11.pkg`) s'installe sans Xcode
+  ni compte Apple, en ligne de commande (`sudo installer -pkg … -target /`).
+- **Python 3.11, pas plus récent, sur un Mac Intel.** C'est la dernière version
+  pour laquelle toute la chaîne existe en paquet précompilé : `av` n'en a plus
+  pour 3.12 sur Intel, et il faudrait compiler.
+- **`pip install --prefer-binary`** est obligatoire. Sans lui, pip prend la
+  dernière version de chaque paquet, tombe sur celles qui ne visent plus les Mac
+  Intel ou exigent macOS 13, et tente de recompiler. Versions retenues :
+  `av 18.0.0`, `ctranslate2 4.8.1`, `onnxruntime 1.19.2` (la dernière avec une
+  roue pour macOS 11), `numpy 2.4.6`, PyObjC 12.2.1.
+- **La ligne d'installation du plan initial était fausse** : `pip install -e
+  ".[macos]"` n'installe pas `sounddevice`, qui vit dans l'extra `recording`. La
+  bonne ligne est `pip install --prefer-binary -e ".[whisper,recording,macos]"`.
+- **`quickmachotkey` est dans l'extra `macos` mais n'est jamais utilisé** : le
+  pont Carbon est écrit en `ctypes` à la main. Dépendance morte, à retirer.
 
-L'outil qui répond aux deux, sans deviner :
+---
+
+## Résultats de la checklist
+
+| # | Point | Verdict |
+|---|-------|---------|
+| 1 | Démarrage : run loop AppKit + serveur | ✅ |
+| 2 | Autorisations TCC à travers une relance | ✅ (après correction, voir A) |
+| 3 | Inscription du raccourci ⌃⌥D | ✅ `registered: true`, aucun OSStatus |
+| 4 | Bascule + insertion + typographie française | ✅ |
+| 5 | Double-appui rapide absorbé | ✅ mesuré à 200 ms → `IGNORE` |
+| 6 | Combinaison réservée → échec observable | ❌ **inatteignable** (voir C) |
+| 7 | Fermeture propre | ⚠️ partiel (voir D et E) |
+
+### Les deux mesures que le plan laissait ouvertes
+
+1. **Un appui physique = un événement, exactement.** Quatre appuis espacés ont
+   produit quatre lignes, jamais de doublon ni de répétition automatique. La
+   portée du filtre anti-répétition n'a pas besoin d'être restreinte.
+2. **⌃⌥D est libre sur Big Sur** : `RegisterEventHotKey` rend `noErr`.
+
+Mesures complémentaires, qui ont tranché la valeur du filtre :
+
+- Double-appui **volontairement rapide** : 200 à 216 ms.
+- Double-appui **à vitesse naturelle** : 512 à 800 ms (cinq mesures).
+
+La fenêtre de 250 ms est donc **au bon endroit** et reste inchangée : elle avale
+le geste réflexe et laisse passer une intention. Un geste à 700 ms est un arrêt
+délibéré, pas un accident.
+
+### Typographie française, vérifiée caractère par caractère
+
+Dicté dans TextEdit et dans LibreOffice, relu dans le presse-papier :
+
+> `Il m’a dit que c’est vraiment l’été, n’est-ce pas ?`
+
+Quatre apostrophes courbes U+2019, aucune U+0027, une espace insécable U+00A0
+devant le point d'interrogation — et **pas** la fine U+202F. La promesse centrale
+du projet tient sur le chemin macOS.
+
+---
+
+## A. Le plantage : signatures ctypes absentes (corrigé)
+
+**Symptôme** : `Segmentation fault: 11` à la toute première exécution native, avant
+même la ligne `registered`.
+
+**Cause, prouvée** : `_CarbonBackend` ne déclarait ni `restype` ni `argtypes`, donc
+ctypes supposait des entiers 32 bits. Mesuré sur la machine :
 
 ```
-aparte install-hotkey --diagnostic          # combi configurée, sinon ⌃⌥D
-aparte install-hotkey --diagnostic --key cmd+shift+space
+pointeur réel      : 0x00007ffc9f816590
+supposé par ctypes : -0x0000000607e9a70   ← la moitié haute a disparu
 ```
 
-Il inscrit la combinaison **en direct** (hors serveur, hors répartiteur — donc
-événements **bruts**), imprime l'`OSStatus`, puis journalise chaque événement reçu
-avec l'écart depuis le précédent. Appuyer une fois → doit afficher **une** ligne
-`press #1`. Appuyer vite deux fois → deux lignes, avec l'écart en secondes à
-comparer aux 250 ms du debounce. `Ctrl-C` pour arrêter. **À rapporter : le nombre
-de lignes par appui unique, et l'écart d'un double-tap.**
+Carbon recevait une adresse inventée et plantait en la déréférençant.
 
-## Checklist (dans l'ordre des dépendances)
+**Corrigé** (`fb23b1a`) : toutes les signatures déclarées ; `ItemCount` et
+`ByteCount` passés en `unsigned long` 64 bits ; classes de structures construites
+une seule fois (ctypes rapproche un argument de son `argtype` par identité de
+classe) ; un `InstallEventHandler` refusé lève désormais au lieu de laisser un
+raccourci inscrit qui ne se déclenche jamais.
 
-Chaque étape : geste → attendu → signature d'échec → invariant prouvé.
+## B. Le micro n'était jamais demandé (corrigé)
 
-### 1. Démarrage
-- **Geste** : `aparte desktop`.
-- **Attendu** : l'app démarre, une seule run loop AppKit, le serveur répond sur
-  `http://127.0.0.1:8765`.
-- **Échec** : plantage à l'import PyObjC/AppKit ; ou l'UI web ne répond pas (run
-  loop qui monopolise, serveur pas passé sur son fil daemon).
-- **Invariant** : run loop unique sur le fil principal, serveur sur fil daemon.
+**Symptôme** : sur un Mac neuf, la première dictée enregistre **du silence**. Pas
+de message, pas de fenêtre, pas d'erreur.
 
-### 2. Permissions TCC, à travers une relance
-- **Geste** : première dictée navigateur → accorder Micro ; tenter une insertion →
-  accorder Accessibilité ; **quitter et relancer** Aparté.
-- **Attendu** : après relance, `aparte doctor` montre Micro ✓ et Accessibilité ✓
-  sans redemander.
-- **Échec** : permission redemandée à chaque lancement (identité de l'app/signature
-  instable) ; ou `doctor` affiche ✓ alors que l'action échoue.
-- **Invariant** : lecture TCC via `macos_permissions` (AVFoundation / `AXIsProcessTrusted`).
+**Cause** : ouvrir un flux PortAudio **ne déclenche aucune demande TCC**. Le flux
+s'ouvre « sans erreur » pendant que le statut reste `not_determined`. Le plan
+supposait qu'une dictée dans le navigateur suffirait à accorder le micro — c'est
+faux : ça n'autorise que Safari, pas Aparté.
 
-### 3. Inscription du raccourci
-- **Geste** : `aparte install-hotkey` (persiste ⌃⌥D), puis **redémarrer** l'app ;
-  ouvrir `http://127.0.0.1:8765/api/hotkey-state`.
-- **Attendu** : `{"registered": true, "configured_key": "ctrl+opt+d", "status": null,
-  "error": null}` ; `doctor` affiche « Raccourci de dictée ⌃⌥D » coché.
-- **Échec** : `registered:false` + un `status` (OSStatus) → combinaison réservée/prise
-  (voir table plus bas) ; passer à une autre combi via `--key`.
-- **Invariant** : `Settings.hotkey` réglage de fichier lu au démarrage ; `serve_macos`
-  publie l'état ; route lecture seule.
+**Corrigé** (`d801456`) : `request_microphone_access()` (AVFoundation) ouvre la
+fenêtre et **attend** la réponse ; `ensure_microphone_access()` garde les deux
+seuls chemins de capture et refuse d'enregistrer plutôt que de livrer du silence.
 
-### 4. Bascule + insertion
-- **Geste** : dans une app tierce (TextEdit, Slack), appuyer ⌃⌥D, parler, ré-appuyer.
-- **Attendu** : premier appui = enregistre ; second = transcrit **et insère le texte
-  dans l'app au premier plan**, typographie française correcte (`’ « » U+00A0`).
-- **Échec** : rien ne s'insère (le texte reste au presse-papier = repli Accessibilité
-  refusée) ; ou caractères français cassés (chemin de frappe directe fautif) ; ou
-  aucune réaction (raccourci non livré → revoir étape 3 et le `--diagnostic`).
-- **Invariant** : raccourci in-process qui déclenche `toggle()` ; livraison `paste` ;
-  polissage français dans le worker.
+**Validé sur la machine**, autorisation remise à zéro par
+`tccutil reset Microphone com.apple.Terminal` : refus → état `error` + statut
+`denied`, aucun enregistrement ; acceptation → `authorized` + dictée livrée.
 
-### 5. Double-appui rapide (le vrai test du répartiteur)
-- **Geste** : appuyer ⌃⌥D **deux fois très vite** (< 250 ms) pour démarrer.
-- **Attendu** : l'enregistrement **démarre et reste actif** — le second appui est
-  absorbé, il n'arrête pas ce que le premier vient de lancer.
-- **Échec** : l'enregistrement démarre puis s'arrête aussitôt (le bug que le
-  répartiteur ferme serait revenu).
-- **Invariant** : debounce **à l'arrivée**, worker unique, jamais un fil par appui.
+## C. Aucun refus d'inscription n'est observable sur macOS
 
-### 6. Combinaison réservée → observable, serveur vivant
-- **Geste** : `aparte install-hotkey --key cmd+space` (Spotlight), redémarrer.
-- **Attendu** : notification `critical` au démarrage ; `doctor` et `/api/hotkey-state`
-  montrent l'échec avec l'`OSStatus` ; **l'UI web et la dictée navigateur marchent
-  toujours**.
-- **Échec** : l'app plante ; ou l'échec est silencieux (pas de notification, pas
-  d'état).
-- **Invariant** : échec d'inscription → notification `critical`, serveur survit.
+Deux cas testés, **les deux acceptés** par `RegisterEventHotKey` :
 
-### 7. Fermeture propre
-- **Geste** : `Ctrl-C` (ou quitter) pendant l'inactivité, puis pendant un
-  enregistrement.
-- **Attendu** : arrêt sans micro laissé ouvert ; teardown ordonné (raccourci
-  désinscrit → répartiteur fermé → contrôleur arrêté → serveur fermé).
-- **Échec** : processus `arecord`/PortAudio orphelin ; interblocage à la sortie.
-- **Invariant** : `finally` ordonné ; `server.shutdown()` sûr (fil daemon).
+- **⌘Espace**, que Spotlight détient : `registered: true`, aucun OSStatus.
+- **Un second Aparté** réclamant ⌃⌥D pendant que le premier le détient :
+  `registered: true` lui aussi.
 
-## Table des OSStatus utiles
+**Conséquence à connaître** : `registered: true` signifie **« macOS a accepté
+l'inscription »**, jamais **« le raccourci fonctionne »**. Un raccourci capté par
+un autre client est indistinguable d'un raccourci vivant. Toute la mécanique
+« échec d'inscription → notification `critical` → OSStatus dans `doctor` » garde
+donc une porte que macOS n'ouvre pas — elle reste correcte, mais inatteignable en
+pratique. Le point 6 de la checklist est **non testable** tel qu'il était écrit.
 
-| Valeur | Nom | Sens |
-|--------|-----|------|
-| `0` | `noErr` | inscription réussie |
-| `-9868` | `eventHotKeyExistsErr` | combinaison déjà prise par un autre client |
-| `-9878` | `eventHotKeyInvalidErr` | combinaison invalide/refusée |
+Vérifier vraiment supposerait d'observer un appui réel, ce qu'aucun sondage
+passif ne peut faire. Décision : **documenter la limite, ne pas coder contre**.
 
-(La liste fait foi côté Apple ; noter la valeur réelle observée, elle peut varier
-selon la version.)
+## D. `Ctrl-C` ne fait aucun démontage ordonné
 
-## Ce qu'il faut me rapporter
+`_appkit_run_loop` remet SIGINT à `SIG_DFL` avant de lancer la boucle, donc un
+Ctrl-C **tue le processus net** : pas de `KeyboardInterrupt`, pas de `finally`,
+pas de « Stopping desktop server ». Vérifié : la ligne n'apparaît jamais.
 
-- Version de macOS.
-- Étape 3 : contenu exact de `/api/hotkey-state` (surtout `status` si échec).
-- `--diagnostic` : lignes par **appui unique** (1 attendu) et écart d'un
-  **double-tap**.
-- Toute étape en « échec » avec sa signature observée.
+Sans conséquence pratique — tout est en mémoire, et le test « tuer en plein
+enregistrement » n'a laissé **aucun processus survivant, aucun lecteur audio
+orphelin, port libéré**. Mais l'invariant écrit décrivait quelque chose qui
+n'arrive pas. Le démontage ordonné vaut pour la sortie *normale* de la boucle
+(le futur « Quitter » du tray, M6), pas pour Ctrl-C.
 
-À partir de là, je corrige le code ; le reste des invariants est déjà tenu par la
-suite mockée (**368 tests verts** sous Linux).
+## E. Captures audio abandonnées (corrigé)
+
+Un processus tué **entre l'écriture du `.wav` et la fin de la transcription**
+laisse la voix de l'utilisateur dans le dossier temporaire — le `finally` qui
+supprime n'a jamais lieu. Deux fichiers retrouvés après les essais.
+
+**Corrigé** (`6d0c012`) : `sweep_orphan_recordings()` au démarrage du serveur,
+sur les fichiers de plus d'une heure — jamais la capture vivante d'une autre
+instance — et sur un motif qui épargne les bips mis en cache.
+
+## F. `doctor` donnait un conseil Linux sur Mac (corrigé)
+
+`hotkey  bind manually: python -m aparte toggle --target paste`, affiché juste
+sous un « Dictation shortcut » coché. `hotkey_info()` interrogeait gsettings et la
+détection d'environnement de bureau, absents sur Mac. Le panneau web aurait de
+même averti qu'un raccourci vivant n'était pas lié.
+
+**Corrigé** (`b40ed80`) : même forme, contenu macOS. `doctor` affiche désormais
+`hotkey  bound to ⌃⌥D`.
+
+## G. Le silence, seul vrai problème d'usage rencontré
+
+Le mécanisme du double-appui est correct, et l'utilisateur s'est quand même
+trompé : n'ayant **aucun retour**, il a cru que son appui n'avait rien fait, a
+réappuyé, et a arrêté l'enregistrement que le premier venait de lancer.
+
+Sur macOS il n'y a ni icône de barre de menus (M6), ni fenêtre — une application
+« accessory » n'affiche rien. **Le bip est le seul signal existant**, et il était
+désactivé par défaut. Il est désormais actif par défaut sur macOS seulement
+(`6d0c012`) ; sous Linux l'icône du panneau fait déjà le travail.
+
+Ça reste un pansement : 90 ms de tonalité se manquent facilement quand on est en
+train de parler. **Le vrai correctif est M6.**
+
+---
+
+## Reste ouvert
+
+- **M6 (barre de menus)** devient prioritaire : c'est le seul retour visuel
+  possible, et M8 a montré que son absence induit l'utilisateur en erreur.
+- **`quickmachotkey`** à retirer de l'extra `macos` (jamais importé).
+- **Hallucination `Thank you.`** insérée sur du silence : `hallucinations.py`
+  connaît « Thanks for watching » mais pas « Thank you » seul. **Décidé : ne rien
+  ajouter** — deux mots parfaitement dictables, et le module dit « dans le doute,
+  ne rien toucher ».
+- **Qualité de transcription** sur Mac Intel : `small` sur processeur, comptez 10
+  à 40 s pour quelques secondes de parole.
+
+## Méthode, si c'est à refaire
+
+Le Mac était derrière un second routeur et le poste Linux derrière un VPN : aucune
+connexion entrante possible. Le montage qui a marché inverse le sens — le Mac va
+chercher chaque étape sur un petit serveur du poste Linux et lui renvoie son
+journal, déclenché par une icône unique à double-cliquer sur le Bureau. Une seule
+commande tapée à la main sur le Mac, pour toute la session.

@@ -352,7 +352,13 @@ phrases voisines.
   - **`finally` ordonné** : désinscrire le raccourci → `dispatcher.close()` (join
     borné, aucun `toggle()` en vol) → `controller.shutdown()` → `server.shutdown()`
     + `server_close()`. `server.shutdown()` **jamais** dans une branche Linux où
-    `serve_forever()` tient le fil principal (interblocage).
+    `serve_forever()` tient le fil principal (interblocage). ⚠️ **Ce démontage ne
+    vaut que pour une sortie normale de la boucle** (le futur « Quitter » du tray,
+    M6) : `_appkit_run_loop` remet SIGINT à `SIG_DFL`, donc un `Ctrl-C` **tue le
+    processus net**, sans `KeyboardInterrupt` et sans `finally` — vérifié en M8, la
+    ligne « Stopping desktop server » n'apparaît jamais. Sans dégât (tout est en
+    mémoire : aucun processus survivant, aucun micro laissé ouvert), mais ne pas
+    écrire ni croire l'inverse.
   - **`Settings.hotkey` = réglage de fichier** lu **au démarrage** (redémarrage
     pour changer en M5), **hors `EDITABLE_FIELDS`** mais **dans `DEFAULT_CONFIG`**
     (sinon `update_config` le jette). **Vide = aucun raccourci** (opt-in via
@@ -369,6 +375,46 @@ phrases voisines.
     neutres — combi / OSStatus / commande ; la phrase de repli est CLI seule) et
     n'est **jamais essentiel**. Échec d'inscription au démarrage → notification
     `critical`, **serveur vivant**. (M5, `docs/plan-portage-macos-m5.md`.)
+  - **`registered: true` veut dire « macOS a accepté l'inscription », jamais « le
+    raccourci fonctionne ».** Mesuré en M8 sur Big Sur : `RegisterEventHotKey`
+    accepte ⌘Espace que Spotlight détient, **et** accepte la même combinaison
+    demandée par un second processus Aparté. Aucun OSStatus dans les deux cas. Un
+    raccourci mort est donc indistinguable d'un raccourci vivant, et le chemin
+    « échec → notification `critical` » garde une porte que macOS n'ouvre pas : il
+    reste juste, il est inatteignable. Ne pas coder de vérification passive
+    là-contre — il faudrait observer un vrai appui.
+- **Le micro macOS se demande explicitement, sinon on enregistre du silence.**
+  Ouvrir un flux PortAudio **ne déclenche aucune fenêtre TCC** : le flux s'ouvre
+  « sans erreur » pendant que le statut reste `not_determined`, et la capture ne
+  contient que du silence — sur un Mac neuf, la première dictée ressemblait à une
+  application cassée (M8). Seul AVFoundation demande. `ensure_microphone_access()`
+  (`audio.py`) garde les **deux seuls** chemins de capture — `_record_wav_sounddevice`
+  (CLI) et `_start_locked` (raccourci) — et **attend** la réponse, car elle arrive
+  de façon asynchrone et repartir aussitôt capterait précisément ce silence. Un
+  refus lève plutôt que de livrer du vide ; un sondage qui ne sait pas répondre
+  (`"unknown"`) ne bloque **jamais** une dictée. Corollaire : une dictée dans le
+  navigateur n'accorde le micro qu'à **Safari**, jamais à Aparté — le plan M8 le
+  supposait et se trompait.
+- **Le pont Carbon déclare toutes ses signatures ctypes.** Sans `restype` ni
+  `argtypes`, ctypes suppose des entiers 32 bits : `GetApplicationEventTarget`
+  rendait un pointeur amputé de sa moitié haute (`0x00007ffc9f816590` lu
+  `-0x607e9a70`) et Carbon plantait dessus — `Segmentation fault` à la toute
+  première exécution native (M8). `ItemCount` et `ByteCount` sont des
+  `unsigned long` **64 bits**, pas des `UInt32`. Les classes de structures se
+  construisent **une seule fois** : ctypes rapproche un argument de son `argtype`
+  par identité de classe, donc une classe reconstruite à chaque appel serait
+  rejetée par la signature déclarée pour elle.
+- **Sur macOS le bip est le seul retour qui existe** (`_DEFAULT_BEEP = is_macos()`
+  dans `config.py`) : pas d'icône de barre de menus avant M6, et une application
+  « accessory » n'affiche rien. En M8, le testeur a cru que son appui n'avait rien
+  fait, a réappuyé, et a arrêté l'enregistrement que le premier venait de lancer —
+  alors que le filtre anti-répétition marchait parfaitement. Sous Linux l'icône du
+  panneau fait déjà le travail, donc le défaut y reste à faux.
+- **Une capture tuée entre son `.wav` et sa transcription laisse la voix de
+  l'utilisateur sur le disque** : le `finally` qui supprime n'a pas lieu.
+  `sweep_orphan_recordings()` balaye au démarrage du serveur, **seulement** les
+  fichiers de plus d'une heure — jamais la capture vivante d'une autre instance —
+  et sur un motif qui épargne les bips mis en cache (`aparte-<uid>-beep-*.wav`).
 - **L'unité de mise à jour est un tag de version, jamais la pointe de la
   branche.** `update.py` compare `__version__` au plus haut tag `vX.Y.Z`
   accessible depuis la branche suivie, et avance jusqu'à **ce tag**. Compter les

@@ -1160,6 +1160,38 @@ par appui — répond aux deux mesures ouvertes (un appui = combien d'événemen
 ⌃⌥D libre ?). 4 tests mockés (`test_macos_runloop.py` +2, `test_cli.py` +2), suite
 verte (368). L'exécution native reste à faire par Alexandre sur son Mac.
 
+**M8 — exécuté le 25/07 sur macOS 11.7.11 (Big Sur) Intel. Compte rendu complet :
+`docs/plan-portage-macos-m8.md`.**
+
+Checklist : points 1 à 5 ✅, point 6 **inatteignable**, point 7 ⚠️ partiel.
+
+- [x] Les deux mesures ouvertes : **un appui = un événement exactement** ; **⌃⌥D
+      libre** (`noErr`). Double-appui volontaire mesuré à 200–216 ms, geste naturel
+      à 512–800 ms → la fenêtre de 250 ms reste **inchangée**, elle est au bon
+      endroit.
+- [x] **Typographie française validée en réel** (TextEdit et LibreOffice) :
+      `Il m’a dit que c’est vraiment l’été, n’est-ce pas ?` — quatre U+2019, une
+      U+00A0 devant le `?`, aucune U+202F.
+- [x] `fb23b1a` **Segmentation fault corrigé** : signatures ctypes du pont Carbon
+      absentes → pointeur 64 bits tronqué de moitié.
+- [x] `d801456` **Micro jamais demandé corrigé** : PortAudio n'ouvre aucune fenêtre
+      TCC et enregistrait du silence. Validé par `tccutil reset` (refus → `error`,
+      acceptation → dictée livrée).
+- [x] `b40ed80` **`doctor` corrigé** : donnait un conseil gsettings sur Mac.
+- [x] `6d0c012` **Bip actif par défaut sur macOS** (seul retour existant) et
+      **balayage des captures abandonnées** au démarrage.
+- [x] Suite verte : **394 tests** (+26).
+
+**Décidé pendant M8** : ne pas ajouter « Thank you » aux hallucinations (deux mots
+dictables) ; documenter la limite de `registered: true` plutôt que coder contre.
+
+**Ce que M8 renvoie vers M6** : sur Mac, rien n'indique que le micro est ouvert —
+pas d'icône, pas de fenêtre. Le testeur a réappuyé et arrêté son propre
+enregistrement alors que le code était correct. **M6 devient prioritaire.**
+
+**Dette repérée** : `quickmachotkey` est dans l'extra `macos` et n'est jamais
+importé (le pont Carbon est en `ctypes`) — à retirer.
+
 ### Windows, pour mémoire (étudié le 23/07, non planifié)
 
 Réécriture partielle, ~15–21 jours, ~le double de Mac. Aucun modèle Unix de

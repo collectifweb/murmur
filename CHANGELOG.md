@@ -80,6 +80,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Proven with mocked unit tests on Linux; the native run loop, Carbon registration,
   and reserved-combo behaviour are validated later on a Mac (M8).
 
+### Fixed
+
+- **macOS, first native run (M8, macOS 11.7.11 Intel).** Everything above was
+  proven under Linux with fakes; running it on a real Mac found four defects that
+  no mock could show. The Carbon bridge **crashed the process** at the very first
+  registration: it declared no ctypes signatures, so a 64-bit event target came
+  back cut in half. The microphone was **never asked for** — opening a PortAudio
+  stream triggers no permission dialog, so a fresh install recorded pure silence
+  with no error, no window, and no clue; Aparté now asks through AVFoundation and
+  refuses to record rather than deliver silence. `aparte doctor` printed a Linux
+  «bind manually» line under a ticked shortcut check. And a capture left the
+  user's voice in the temp folder when the app was killed mid-transcription, which
+  a startup sweep now clears. The start/stop tone is on by default on macOS only:
+  with no menu-bar icon yet, it is the sole sign that the microphone opened. French
+  typography, insertion into other apps, and the fast-double-press guard were
+  verified on the machine and behave exactly as designed.
+
 ## [1.1.1] - 2026-07-23
 
 ### Changed
