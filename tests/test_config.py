@@ -43,6 +43,31 @@ class RecordingCeilingTest(unittest.TestCase):
             self.assertIsNone(load_config(path)["language"])
 
 
+class HotkeyConfigTest(unittest.TestCase):
+    """The macOS shortcut combo is a file setting; empty means no shortcut."""
+
+    def _hotkey(self, *, env=None, config_value=...):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            write_default_config(path)
+            if config_value is not ...:
+                update_config({"hotkey": config_value}, path)
+            base = {"APARTE_CONFIG": str(path), "APARTE_HOTKEY": "", "MURMUR_HOTKEY": ""}
+            base.update(env or {})
+            with mock.patch.dict(os.environ, base):
+                return Settings.from_env().hotkey
+
+    def test_it_defaults_to_empty(self):
+        self.assertEqual(self._hotkey(), "")
+
+    def test_a_configured_combo_is_read(self):
+        self.assertEqual(self._hotkey(config_value="ctrl+opt+d"), "ctrl+opt+d")
+
+    def test_the_env_override_wins_over_the_file(self):
+        got = self._hotkey(env={"APARTE_HOTKEY": "cmd+shift+space"}, config_value="ctrl+opt+d")
+        self.assertEqual(got, "cmd+shift+space")
+
+
 class ConfigTest(unittest.TestCase):
     def test_write_and_load_default_config(self):
         with tempfile.TemporaryDirectory() as directory:

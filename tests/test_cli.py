@@ -5,11 +5,12 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from aparte import cli, linux_desktop, platform_dispatch
 from aparte.cli import build_parser
-from aparte.config import Settings
+from aparte.config import Settings, load_config, update_config, write_default_config
 
 
 def _run_cli(*argv: str):
@@ -154,6 +155,78 @@ class MacToggleTest(unittest.TestCase):
         self.assertIn("macOS", message)
         self.assertIn("dictate", message)
         self.assertIn("Bascule indisponible", notify.call_args.args[0])
+
+
+class MacInstallHotkeyTest(unittest.TestCase):
+    """On macOS install-hotkey persists the combo to config.json — no gsettings.
+    'Installing' only records the choice; the resident server registers it at
+    startup, so a reserved combo surfaces at runtime (doctor), not here. The dev
+    host is Linux, so the platform is mocked."""
+
+    def _args(self, **over):
+        base = dict(
+            command="install-hotkey", key=None, target="paste",
+            name="Aparté dictation", print=False, remove=False,
+        )
+        base.update(over)
+        return SimpleNamespace(**base)
+
+    def _run(self, args, path):
+        env = {
+            "APARTE_CONFIG": str(path), "MURMUR_CONFIG": "",
+            "APARTE_HOTKEY": "", "MURMUR_HOTKEY": "",
+        }
+        with mock.patch.object(cli, "is_macos", return_value=True):
+            with mock.patch.dict(os.environ, env):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    cli.handle_install_hotkey(args)
+        return out.getvalue()
+
+    def _fresh_config(self, directory):
+        path = Path(directory) / "config.json"
+        write_default_config(path)
+        return path
+
+    def test_the_default_persists_the_default_combo(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._fresh_config(d)
+            self._run(self._args(), path)
+            self.assertEqual(load_config(path)["hotkey"], "ctrl+opt+d")
+
+    def test_a_custom_combo_is_normalized_and_persisted(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._fresh_config(d)
+            self._run(self._args(key="alt+Ctrl+D"), path)
+            self.assertEqual(load_config(path)["hotkey"], "ctrl+opt+d")
+
+    def test_remove_clears_the_combo(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._fresh_config(d)
+            update_config({"hotkey": "ctrl+opt+d"}, path)
+            self._run(self._args(remove=True), path)
+            self.assertEqual(load_config(path)["hotkey"], "")
+
+    def test_a_copy_target_is_refused_without_writing(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._fresh_config(d)
+            out = self._run(self._args(target="copy"), path)
+            self.assertIn("paste", out)
+            self.assertEqual(load_config(path)["hotkey"], "")   # untouched
+
+    def test_an_invalid_combo_is_refused_without_writing(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._fresh_config(d)
+            out = self._run(self._args(key="ctrl+opt+zz"), path)
+            self.assertIn("Invalid", out)
+            self.assertEqual(load_config(path)["hotkey"], "")
+
+    def test_print_shows_the_combo_and_never_writes(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._fresh_config(d)
+            out = self._run(self._args(print=True), path)
+            self.assertIn("⌃⌥D", out)                           # the default combo, pretty
+            self.assertEqual(load_config(path)["hotkey"], "")   # print never persists
 
 
 class CliParserTest(unittest.TestCase):

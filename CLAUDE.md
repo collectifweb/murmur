@@ -94,9 +94,11 @@ famille que `HistoryEndpointTest` ; vu le 23/07 sur un test de la couture macOS
 **Un test qui laisse un chemin natif macOS appeler le vrai `notify()` empoisonne
 l'interpréteur** : `notify.py` importe `gi` (GTK), qui échoue ici (« Unable to
 register enum ») et laisse le module cassé pour les tests suivants — erreurs en
-cascade, invisibles en isolé, seulement en suite. Stubber `notify` (et le
-`deliver_transcript` importé paresseusement) au niveau du module dans le `setUp`,
-comme `test_macos_recording.py`. Vu le 24/07 (M4).
+cascade, invisibles en isolé, seulement en suite. Stubber `notify` (et les helpers
+importés paresseusement par le worker, `deliver_transcript` **et**
+`polish_for_delivery`) au niveau du module dans le `setUp`, comme
+`test_macos_recording.py`. Sans stubber `polish_for_delivery`, le vrai polissage
+tourne sur les réglages factices du test et casse. Vu le 24/07 (M4).
 
 ## Invariants à ne pas casser
 
@@ -319,7 +321,54 @@ phrases voisines.
   desktop` cyclerait à l'import. Le contrôleur n'est **déclenché par aucune route
   HTTP** (invariant Darwin ci-dessus) : seul `GET /api/recording-state`, en lecture
   seule, l'observe ; son vrai déclencheur est le raccourci in-process (M5).
-  (M4, `docs/plan-portage-macos-m4.md`.)
+  Durcissement du 24/07 (contre-expertise) : le worker **polit** le texte brut via
+  `polish_for_delivery` (partagé avec la CLI) avant de le livrer — le retirer livre
+  du texte sans typographie française sur le chemin macOS principal ; le polissage
+  vit dans le worker, **jamais** dans `transcribe_fn`/`_transcribe_capture`, qui
+  reste une primitive de transcription pure. Chaque capture possède sa capsule
+  (`_Capture`) et un callback en fermeture : un callback tardif ou un stream mal
+  fermé ne peut pas contaminer la capture suivante (donc `_close_stream` reste
+  best-effort). (M4, `docs/plan-portage-macos-m4.md` ;
+  durcissement `docs/plan-portage-macos-m4-durcissement.md`.)
+- **Sur macOS, le raccourci clavier global déclenche l'enregistrement
+  in-process** (`macos_hotkey.py`, `macos_runloop.py`, M5). Les garde-fous :
+  - **Une seule run loop AppKit sur le fil principal** ; le serveur HTTP passe sur
+    un fil daemon (comme sous le tray GTK). `RegisterEventHotKey` (API Carbon, sans
+    permission « Surveillance de l'entrée ») n'existe que si une run loop vivante
+    lui livre ses événements, et `NSApplication` doit exister **avant**
+    l'inscription — d'où le point d'accroche `on_ready()`, appelé une fois la
+    boucle vivante, où l'inscription se fait (jamais avant).
+  - **Le callback Carbon ne bloque jamais la run loop** : `HotkeyDispatcher`
+    répartit **hors run loop** sur un **worker unique** et **filtre les répétitions
+    à l'arrivée** de l'événement (horodatage sous son verrou, décision avant de
+    réveiller le worker), **jamais à l'exécution**. Un fil par appui avait un vrai
+    bug : `toggle()` garde son verrou pendant l'I/O de démarrage, donc un
+    double-appui pouvait **arrêter l'enregistrement que le premier venait de
+    lancer**. Ne pas y revenir ; une file de capacité 1 ne corrige pas non plus.
+  - **`run_desktop()` possède le contrôleur** (rendu par
+    `handler_factory(return_controller=True)`) : il câble le déclencheur et appelle
+    `shutdown()`. Le handler HTTP ne fait qu'**observer** (`_recording_controller`,
+    `hotkey_state`).
+  - **`finally` ordonné** : désinscrire le raccourci → `dispatcher.close()` (join
+    borné, aucun `toggle()` en vol) → `controller.shutdown()` → `server.shutdown()`
+    + `server_close()`. `server.shutdown()` **jamais** dans une branche Linux où
+    `serve_forever()` tient le fil principal (interblocage).
+  - **`Settings.hotkey` = réglage de fichier** lu **au démarrage** (redémarrage
+    pour changer en M5), **hors `EDITABLE_FIELDS`** mais **dans `DEFAULT_CONFIG`**
+    (sinon `update_config` le jette). **Vide = aucun raccourci** (opt-in via
+    `install-hotkey`, cohérent avec Linux) : le serveur n'inscrit rien. Format
+    canonique macOS `ctrl+opt+d` (entrée), distinct des accélérateurs gsettings ;
+    `⌃⌥D` est **sortie seule** (`hotkey_label`).
+  - **L'état du raccourci s'observe, il ne déclenche aucun effet système** :
+    `GET /api/hotkey-state` (lecture seule, autorisée sur Darwin) rend
+    `{registered, configured_key, status, error}`. `serve_macos` **publie** cet état
+    (`HotkeyState`) sur la classe du handler ; `doctor` le lit **in-process** (le
+    handler le passe à `collect_diagnostics`), le `doctor` CLI l'auto-requête
+    (borné 0,5 s) sinon repli statique lu dans la config. Le check `hotkey` a un
+    **`detail` dynamique sans clé i18n** (le panneau web ne voit que des détails
+    neutres — combi / OSStatus / commande ; la phrase de repli est CLI seule) et
+    n'est **jamais essentiel**. Échec d'inscription au démarrage → notification
+    `critical`, **serveur vivant**. (M5, `docs/plan-portage-macos-m5.md`.)
 - **L'unité de mise à jour est un tag de version, jamais la pointe de la
   branche.** `update.py` compare `__version__` au plus haut tag `vX.Y.Z`
   accessible depuis la branche suivie, et avance jusqu'à **ce tag**. Compter les

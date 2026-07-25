@@ -1088,6 +1088,69 @@ avant de brancher le raccourci. Plan : `docs/plan-portage-macos-m4-durcissement.
 - Preuve : **313 tests verts** (+7 : 5 recording, 2 cli). `cli.py` purement additif,
   `desktop.py` non touché → Linux byte-identique.
 
+### M5 — raccourci global macOS (branche `feat/portage-macos`, **planifié + validé `/confront-codex` le 24/07, pas commencé**)
+
+Donner au `RecordingController` (dormant depuis M4) son vrai déclencheur : un
+raccourci clavier global `RegisterEventHotKey` (Carbon) qui appelle `toggle()`
+**in-process**, sous une **run loop AppKit unique** sur le fil principal (serveur
+HTTP sur fil secondaire). Aucune route HTTP à effet système (invariant Darwin M3).
+Plan consolidé : `docs/plan-portage-macos-m5.md`. Découpage validé des deux côtés
+(consensus Codex, 2 rounds) — archives
+`docs/archives/confront-codex-portage-macos-m5-2026-07-24-1451/`.
+
+Découpage (aucun code écrit ; à implémenter, tout prouvé par mocks sous Linux) :
+- [x] **M5a** — `macos_hotkey.py` : façade `register_hotkey` (binding **interne
+      ctypes/PyObjC**, `OSStatus` brut, `kEventHotKeyPressed` seul, handle explicite),
+      `HotkeyDispatcher` (**fil unique**, **debounce à l'arrivée** de l'événement,
+      `closing`, `close()` avec `join()` borné, exceptions capturées),
+      `normalize_hotkey`/`hotkey_label`. Défaut **⌃⌥D**. 21 tests mockés
+      (`tests/test_macos_hotkey.py`), suite entière verte (334). Livré le 24/07.
+- [x] **M5b** — `macos_runloop.py` (runner AppKit injectable via `run_loop(on_ready)`,
+      policy `accessory`, SIGINT restauré) + câblage `run_desktop` :
+      `handler_factory(…, return_controller=…)`, branche macOS (serveur fil daemon +
+      runner fil principal), `finally` **ordonné** (unregister hotkey →
+      `dispatcher.close()` → `controller.shutdown()` → `server.shutdown()`+`server_close()`).
+      Enregistrement fait par `on_ready` (NSApplication doit exister avant). 11 tests
+      (`test_macos_runloop.py` + `test_desktop.py`), suite verte (345). Livré le 24/07.
+- [x] **M5c** — `install-hotkey` macOS + `Settings.hotkey` (`DEFAULT_CONFIG` vide +
+      `APARTE_HOTKEY`, **hors `EDITABLE_FIELDS`**) : `--print`, défaut (valide+persiste
+      ⌃⌥D), `--remove` (vide le champ), rejet `--target≠paste`. **Vide = aucun raccourci**
+      (comme Linux : le raccourci n'existe qu'après `install-hotkey`) ; `serve_macos`
+      corrigé pour ne rien enregistrer sur vide. 9 tests (`test_cli.py`, `test_config.py`),
+      suite verte (354). Livré le 24/07.
+- [x] **M5d** — route lecture-seule `GET /api/hotkey-state`
+      (`{registered, configured_key, status, error}`, Darwin-safe) + check `doctor`
+      macOS (`hotkey`) : état passé **in-process** par le handler (`hotkey_state` publié
+      sur la classe par `serve_macos`) ; sinon auto-requête bornée (0,5 s) vers un serveur
+      qui tourne ; sinon repli statique depuis la config. `detail` **dynamique, sans clé
+      i18n** (label `check.hotkey.label` fr+en seulement) — le panneau web n'atteint que
+      les détails neutres (combi / OSStatus / commande), la phrase anglaise de repli est
+      **CLI seulement**. Notification `critical` au démarrage sur échec (serveur survit).
+      Check **jamais essentiel**. 10 tests (`test_macos_runloop.py` +1, `test_desktop.py`
+      +3 `HotkeyStateRouteTest`, `test_diagnostics.py` +6 `MacHotkeyCheckTest`), suite
+      verte (364). Chemin Linux byte-identique (aucun check `hotkey`, `hotkey_info()`
+      inchangé). Livré le 24/07.
+- [x] **M5e** — invariants M5 écrits dans `CLAUDE.md` (§ Serveur : run loop AppKit
+      unique, dispatch hors run loop + debounce à l'arrivée, ownership `run_desktop`,
+      `finally` ordonné, `Settings.hotkey` réglage de fichier, `/api/hotkey-state`
+      lecture seule) ; `CHANGELOG.md` §M5 (Unreleased/Added) ; `tasks/todo.md`.
+      Suite entière verte (364). Livré le 24/07.
+
+**Décidé (issu du débat Codex).**
+- *Répartiteur à fil unique, debounce à l'arrivée* plutôt qu'un fil par appui : ce
+  dernier avait un **vrai bug** (un double-appui pouvait arrêter un enregistrement au
+  démarrage lent, car le debounce M4 mesure l'exécution, pas l'arrivée). Une file de
+  capacité 1 ne corrige pas non plus.
+- *Contrôleur rendu explicitement par `handler_factory`* (ownership dans `run_desktop`)
+  plutôt que relu depuis l'attribut de classe du handler.
+- *Route `/api/hotkey-state` lue par `doctor`* plutôt qu'une notification vite perdue.
+- *Binding Carbon interne* (statut exact) plutôt que `quickmachotkey`.
+
+**Reporté.** M6 : fermeture pendant `processing` (abandon vs join borné),
+ré-enregistrement à chaud, surface d'état riche. M8 : validation native (cohabitation
+run loop + hotkey, TCC, PortAudio), OSStatus réels, duplication d'événements,
+confirmation de la combinaison par défaut **⌃⌥D**.
+
 ### Windows, pour mémoire (étudié le 23/07, non planifié)
 
 Réécriture partielle, ~15–21 jours, ~le double de Mac. Aucun modèle Unix de

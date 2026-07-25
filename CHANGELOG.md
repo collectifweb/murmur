@@ -63,6 +63,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of delivering raw text, a stop that fails to start its worker goes to an
   observable error state instead of sticking on "processing", and a stream is
   always closed on a start error.
+- **macOS global shortcut (M5).** A global keyboard shortcut now drives the
+  in-process recorder on macOS: press to start dictation, press again to transcribe
+  and insert. It uses Carbon's `RegisterEventHotKey` — which needs no "Input
+  Monitoring" permission, unlike an event tap — registered on a single AppKit run
+  loop that owns the main thread while the HTTP server moves to a daemon thread, the
+  same split as the GTK tray on Linux. The Carbon callback dispatches off the run
+  loop onto one debounced worker, so a fast double-press can't stop the recording it
+  just started. The combination is a file setting (`hotkey`, empty by default = no
+  shortcut; opt in with `aparte install-hotkey`, e.g. ⌃⌥D) read at startup; changing
+  it needs a restart. Its registration is observable through a read-only
+  `GET /api/hotkey-state` and an `aparte doctor` entry, and a refused combination
+  raises a critical notification at startup while the server keeps serving the web
+  UI and browser dictation. No HTTP route triggers the shortcut — it is in-process
+  only, and the Darwin route guard from M3 stands. Linux behaviour is unchanged.
+  Proven with mocked unit tests on Linux; the native run loop, Carbon registration,
+  and reserved-combo behaviour are validated later on a Mac (M8).
 
 ## [1.1.1] - 2026-07-23
 

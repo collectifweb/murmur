@@ -488,6 +488,9 @@ def handle_install_autostart(args: argparse.Namespace) -> None:
 
 
 def handle_install_hotkey(args: argparse.Namespace) -> None:
+    if is_macos():
+        _install_hotkey_macos(args)
+        return
     from .hotkey import command_string, current_binding, detect_desktop, key_label, manual_instructions, aparte_command
 
     command = command_string(aparte_command("toggle", "--target", args.target))
@@ -509,3 +512,52 @@ def handle_install_hotkey(args: argparse.Namespace) -> None:
         return
     print(f"Bound {key_label(result.key)} → {result.command} ({result.desktop}, {result.slot}).")
     print("Press it once to start dictating, again to transcribe and insert.")
+
+
+def _install_hotkey_macos(args: argparse.Namespace) -> None:
+    """macOS install-hotkey: persist the combo to config.json (no gsettings here).
+
+    Unlike Linux, "installing" only records the choice — the resident server
+    registers it at startup. So a reserved/taken combo surfaces at runtime
+    (doctor, /api/hotkey-state), not here. Delivery is always paste on macOS.
+    """
+    from .config import load_config, update_config
+    from .macos_hotkey import DEFAULT_HOTKEY, HotkeyError, hotkey_label, normalize_hotkey
+
+    if args.target != "paste":
+        # The resident worker always delivers to paste (macos_recording); accepting
+        # copy/stdout would silently promise a mode the shortcut cannot honor.
+        print("On macOS the dictation shortcut always inserts (--target paste).")
+        print("For copy or stdout, run the dictation directly: aparte dictate --target copy.")
+        return
+
+    if args.remove:
+        update_config({"hotkey": ""})
+        print("Removed the dictation shortcut. Restart Aparté for it to take effect.")
+        return
+
+    if args.print:
+        combo = args.key or str(load_config().get("hotkey", "") or "") or DEFAULT_HOTKEY
+        try:
+            print(f"shortcut {hotkey_label(combo)}  ({normalize_hotkey(combo)})")
+        except HotkeyError as exc:
+            print(f"Invalid shortcut {combo!r}: {exc}")
+            return
+        print("Active only while Aparté is running (it registers the shortcut at startup).")
+        print("Set or clear it: aparte install-hotkey --key '<combo>'  /  --remove.")
+        print(
+            "For a shortcut that works without Aparté running, bind 'aparte toggle' with "
+            "skhd (https://github.com/koekeishiya/skhd). Not integrated."
+        )
+        return
+
+    combo = args.key or DEFAULT_HOTKEY
+    try:
+        canonical = normalize_hotkey(combo)
+    except HotkeyError as exc:
+        print(f"Invalid shortcut {combo!r}: {exc}")
+        print("Use the macOS format, e.g. 'ctrl+opt+d' or 'cmd+shift+space'.")
+        return
+    update_config({"hotkey": canonical})
+    print(f"Set the dictation shortcut to {hotkey_label(canonical)}  ({canonical}).")
+    print("It takes effect when Aparté (re)starts, and works only while it runs.")

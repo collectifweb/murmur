@@ -87,11 +87,22 @@ def run_desktop(host: str, port: int, settings: Settings, open_browser: bool = T
         return
 
     port = _available_port(host, port)
-    server = ThreadingHTTPServer((host, port), handler_factory(settings))
+    handler, controller = handler_factory(settings, return_controller=True)
+    server = ThreadingHTTPServer((host, port), handler)
     url = f"http://{host}:{server.server_port}"
     if open_browser:
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     print(f"Aparté desktop running at {url}")
+    if is_macos():
+        # The global shortcut only works while a live AppKit run loop pumps its
+        # events, and that loop must own the main thread — so the server moves to a
+        # daemon thread (as it does under the GTK tray on Linux). macos_runloop owns
+        # the shortcut, the run loop and the ordered teardown; imported here so no
+        # AppKit/Carbon piece loads off macOS.
+        from .macos_runloop import serve_macos
+
+        serve_macos(server, controller, settings)
+        return
     # The tray icon needs GTK on the main thread, so the server moves off it.
     # Without the system bindings there is no tray, and nothing changes.
     tray = build_tray(url, settings, server.shutdown)
@@ -187,7 +198,9 @@ def _available_port(host: str, preferred_port: int) -> int:
     return 0
 
 
-def handler_factory(settings: Settings) -> type[BaseHTTPRequestHandler]:
+def handler_factory(
+    settings: Settings, *, return_controller: bool = False
+) -> type[BaseHTTPRequestHandler] | tuple[type[BaseHTTPRequestHandler], RecordingController | None]:
     # The Whisper model is expensive to load, so build each transcriber once and
     # reuse it across requests instead of reloading the model every time. The
     # cache is keyed by model name so the UI can toggle between models (e.g.
@@ -242,6 +255,10 @@ def handler_factory(settings: Settings) -> type[BaseHTTPRequestHandler]:
         # The in-process macOS recorder, wired below on Darwin only. None on Linux,
         # where the global shortcut drives detached CLI recorders instead.
         _recording_controller = None
+        # The macOS global-shortcut registration, published here by serve_macos
+        # (M5b/M5d). None on Linux and until serve_macos runs, which makes the
+        # read-only /api/hotkey-state route 404 off the resident macOS server.
+        hotkey_state = None
 
         def do_GET(self) -> None:
             route = self.path.split("?", 1)[0]
@@ -255,7 +272,11 @@ def handler_factory(settings: Settings) -> type[BaseHTTPRequestHandler]:
                 self._send_json(self._read_config())
                 return
             if route == "/api/doctor":
-                self._send_json(collect_diagnostics(current_settings()))
+                # Pass the shortcut state this server already owns, so the macOS
+                # hotkey check reads it in-process instead of self-requesting.
+                self._send_json(
+                    collect_diagnostics(current_settings(), hotkey_state=self.hotkey_state)
+                )
                 return
             if route == "/api/history":
                 active = current_settings()
@@ -279,6 +300,24 @@ def handler_factory(settings: Settings) -> type[BaseHTTPRequestHandler]:
                     self.send_error(HTTPStatus.NOT_FOUND)
                     return
                 self._send_json({"state": controller.state})
+                return
+            if route == "/api/hotkey-state":
+                # Read-only, so it stays allowed on Darwin: doctor and the tray
+                # (M6) observe whether the global shortcut registered. serve_macos
+                # owns and publishes this state; absent (404) off macOS and until
+                # the resident server sets it, where there is no shortcut.
+                state = self.hotkey_state
+                if state is None:
+                    self.send_error(HTTPStatus.NOT_FOUND)
+                    return
+                self._send_json(
+                    {
+                        "registered": state.registered,
+                        "configured_key": state.configured_key,
+                        "status": state.status,
+                        "error": state.error,
+                    }
+                )
                 return
             self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -489,17 +528,22 @@ def handler_factory(settings: Settings) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
             self.wfile.write(data)
 
+    controller: RecordingController | None = None
     if is_macos():
         # macOS records in the resident server's memory (M4). The controller shares
         # the single inference_lock and the one cached Whisper model — never a
         # self-HTTP call — and is reached in-process by the M5 shortcut and the M6
-        # tray. Its trigger lands in M5; here it is built and observable.
+        # tray. The shortcut wiring lands in M5b via run_desktop.
         def _transcribe_capture(wav: Path) -> str:
             with inference_lock:
                 return get_transcriber(current_settings()).transcribe(wav).text
 
-        DesktopHandler._recording_controller = RecordingController(
-            _transcribe_capture, current_settings
-        )
+        controller = RecordingController(_transcribe_capture, current_settings)
+        DesktopHandler._recording_controller = controller
 
+    # run_desktop() owns the controller (it wires the shortcut and calls shutdown);
+    # the handler keeps _recording_controller only to observe it (read-only route).
+    # Off macOS the controller is None and no native piece is imported.
+    if return_controller:
+        return DesktopHandler, controller
     return DesktopHandler

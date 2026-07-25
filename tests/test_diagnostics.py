@@ -1,10 +1,15 @@
 import contextlib
 import unittest
+from pathlib import Path
 from unittest import mock
 
+import aparte
 from aparte import diagnostics
 from aparte.config import Settings
 from aparte.diagnostics import collect_checks, collect_diagnostics
+from aparte.macos_hotkey import HotkeyState
+
+I18N_JS = Path(aparte.__file__).resolve().parent / "assets" / "i18n.js"
 
 
 class DiagnosticsTest(unittest.TestCase):
@@ -44,6 +49,11 @@ class MacDiagnosticsTest(unittest.TestCase):
         )
         stack.enter_context(
             mock.patch("aparte.macos_permissions.accessibility_trusted", return_value=accessibility)
+        )
+        # The hotkey check self-requests a running server when given no state; keep
+        # the default off the network. Individual tests override it or pass a state.
+        stack.enter_context(
+            mock.patch.object(diagnostics, "_query_hotkey_state", return_value=None)
         )
         return stack
 
@@ -92,6 +102,69 @@ class MacDiagnosticsTest(unittest.TestCase):
         # in print_doctor its remedy would never reach a CLI user.
         self.assertIn("Microphone permission", text)
         self.assertIn("System Settings", text)
+
+
+class MacHotkeyCheckTest(unittest.TestCase):
+    """The macOS global-shortcut check (M5d): registered → the combo; refused →
+    the OSStatus; unconfigured → install-hotkey; and, from the CLI with no server
+    answering, a static reply from the config. Its detail is dynamic, so it must
+    carry no i18n detail key. The machine here is Linux; the platform is mocked."""
+
+    def _mac_env(self):
+        stack = contextlib.ExitStack()
+        stack.enter_context(mock.patch.object(diagnostics, "is_macos", return_value=True))
+        stack.enter_context(mock.patch.object(diagnostics, "_whisper_model_cached", return_value=True))
+        stack.enter_context(mock.patch("aparte.macos_permissions.microphone_authorization", return_value="authorized"))
+        stack.enter_context(mock.patch("aparte.macos_permissions.accessibility_trusted", return_value=True))
+        stack.enter_context(mock.patch.object(diagnostics, "_query_hotkey_state", return_value=None))
+        return stack
+
+    def _hotkey(self, checks):
+        return next(c for c in checks if c.key == "hotkey")
+
+    def test_a_registered_shortcut_passes_and_shows_the_combo(self):
+        state = HotkeyState(registered=True, configured_key="ctrl+opt+d")
+        with self._mac_env():
+            hk = self._hotkey(collect_checks(Settings(), hotkey_state=state))
+        self.assertTrue(hk.ok)
+        self.assertEqual(hk.detail, "⌃⌥D")
+
+    def test_a_refused_shortcut_fails_and_carries_the_osstatus(self):
+        state = HotkeyState(configured_key="ctrl+opt+d", status=-9878, error="taken")
+        with self._mac_env():
+            hk = self._hotkey(collect_checks(Settings(), hotkey_state=state))
+        self.assertFalse(hk.ok)
+        self.assertIn("⌃⌥D", hk.detail)
+        self.assertIn("-9878", hk.detail)
+
+    def test_no_configured_shortcut_points_at_install_hotkey(self):
+        # Server up (state present) but nothing configured — opt in with install-hotkey.
+        with self._mac_env():
+            hk = self._hotkey(collect_checks(Settings(), hotkey_state=HotkeyState()))
+        self.assertFalse(hk.ok)
+        self.assertIn("install-hotkey", hk.detail)
+
+    def test_the_cli_falls_back_to_the_config_when_no_server_answers(self):
+        # No in-process state and _query returns None: the configured combo tells
+        # the user to start the app. This branch is CLI-only (English is fine there).
+        with self._mac_env():
+            hk = self._hotkey(collect_checks(Settings(hotkey="ctrl+opt+d")))
+        self.assertFalse(hk.ok)
+        self.assertIn("⌃⌥D", hk.detail)
+
+    def test_the_check_is_never_essential(self):
+        # The app still dictates from the browser without a shortcut, so a missing
+        # one must not flip the "ready" summary to false.
+        with self._mac_env():
+            hk = self._hotkey(collect_checks(Settings(), hotkey_state=HotkeyState()))
+        self.assertFalse(hk.essential)
+
+    def test_the_hotkey_detail_carries_no_static_i18n_key(self):
+        # A check.hotkey.detail key would overwrite the dynamic detail and could
+        # contradict the icon (the config-check convention). Label yes, detail no.
+        i18n = I18N_JS.read_text(encoding="utf-8")
+        self.assertIn('"check.hotkey.label"', i18n)
+        self.assertNotIn('"check.hotkey.detail"', i18n)
 
 
 if __name__ == "__main__":

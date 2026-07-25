@@ -39,6 +39,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "beep": False,
     "live_preview": True,
     "max_recording_seconds": 300,
+    # macOS-only: the global shortcut combo, e.g. "ctrl+opt+d". Empty = no
+    # shortcut (run `aparte install-hotkey`). Linux keeps its shortcut in
+    # gsettings, never here. Not web-editable — a file setting like the cap above.
+    "hotkey": "",
     "ollama_url": "http://127.0.0.1:11434",
     "ollama_model": "llama3.1:8b",
     "whisper_cpp": None,
@@ -76,6 +80,7 @@ class Settings:
     beep: bool = False
     live_preview: bool = True
     max_recording_seconds: int = 300
+    hotkey: str = ""
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.1:8b"
     whisper_cpp: str | None = None
@@ -116,6 +121,7 @@ class Settings:
             # illisible, et une faute de frappe rouvrirait le micro sans fin.
             # Qui veut deux heures écrit 7200.
             max_recording_seconds=positive_int(config.get("max_recording_seconds", 300)) or 300,
+            hotkey=get_env("HOTKEY") or str(config.get("hotkey", "") or ""),
             ollama_url=get_env("OLLAMA_URL") or str(config.get("ollama_url", DEFAULT_CONFIG["ollama_url"])),
             ollama_model=get_env("OLLAMA_MODEL") or str(config.get("ollama_model", DEFAULT_CONFIG["ollama_model"])),
             whisper_cpp=whisper_cpp if whisper_cpp is not None else _optional_str(config.get("whisper_cpp")),

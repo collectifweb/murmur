@@ -494,5 +494,119 @@ class RecordingStateRouteTest(unittest.TestCase):
         fake.transcribe.assert_called_once_with(Path("/tmp/x.wav"))
 
 
+class HotkeyStateRouteTest(unittest.TestCase):
+    """The global shortcut's registration is observable through a read-only GET
+    (allowed on Darwin) for doctor and the tray (M6). serve_macos publishes the
+    state on the handler class; without it — off macOS, or before the resident
+    server runs — the route 404s. The route only reads a snapshot, no native code."""
+
+    def test_it_returns_the_published_state(self):
+        from aparte.macos_hotkey import HotkeyState
+
+        Handler = handler_factory(Settings())
+        Handler.hotkey_state = HotkeyState(registered=True, configured_key="ctrl+opt+d")
+        res = make_request("GET", "/api/hotkey-state", handler_class=Handler)
+        self.assertEqual(res["status"], int(HTTPStatus.OK))
+        self.assertEqual(
+            json.loads(res["body"]),
+            {"registered": True, "configured_key": "ctrl+opt+d", "status": None, "error": None},
+        )
+
+    def test_a_registration_failure_surfaces_its_status(self):
+        from aparte.macos_hotkey import HotkeyState
+
+        Handler = handler_factory(Settings())
+        Handler.hotkey_state = HotkeyState(configured_key="ctrl+opt+d", status=-9878, error="taken")
+        res = make_request("GET", "/api/hotkey-state", handler_class=Handler)
+        self.assertEqual(res["status"], int(HTTPStatus.OK))
+        self.assertEqual(
+            json.loads(res["body"]),
+            {"registered": False, "configured_key": "ctrl+opt+d", "status": -9878, "error": "taken"},
+        )
+
+    def test_the_route_is_absent_until_a_state_is_published(self):
+        # Default handler (no serve_macos): hotkey_state is None → 404, as off macOS.
+        res = make_request("GET", "/api/hotkey-state")
+        self.assertEqual(res["status"], int(HTTPStatus.NOT_FOUND))
+
+
+class HandlerFactoryControllerTest(unittest.TestCase):
+    """run_desktop needs the controller explicitly (M5b): it owns its lifecycle,
+    the handler only observes it. return_controller gives (class, controller) —
+    the controller on Darwin, None elsewhere, with no native import off macOS."""
+
+    def test_the_flag_returns_none_off_darwin(self):
+        with mock.patch.object(desktop, "is_macos", return_value=False):
+            handler, controller = handler_factory(Settings(), return_controller=True)
+        self.assertIsNone(controller)
+        self.assertTrue(isinstance(handler, type))
+
+    def test_the_flag_returns_the_wired_controller_on_darwin(self):
+        with mock.patch.object(desktop, "is_macos", return_value=True):
+            handler, controller = handler_factory(Settings(), return_controller=True)
+        self.assertIsNotNone(controller)
+        self.assertIs(handler._recording_controller, controller)
+
+    def test_without_the_flag_the_call_is_unchanged(self):
+        # Every existing caller passes only settings and gets the class back.
+        self.assertTrue(isinstance(handler_factory(Settings()), type))
+
+
+class _FakeRunServer:
+    def __init__(self):
+        self.server_port = 8765
+        self.serve_forever_called = False
+        self.closed = False
+
+    def serve_forever(self):
+        self.serve_forever_called = True
+
+    def shutdown(self):
+        pass
+
+    def server_close(self):
+        self.closed = True
+
+
+class RunDesktopPlatformTest(unittest.TestCase):
+    """run_desktop hands macOS off to the AppKit runner (serve_macos) and keeps the
+    Linux path — serve directly, no runner. The native pieces are patched away."""
+
+    def _patches(self, server, is_mac, controller):
+        return (
+            mock.patch.object(desktop, "already_running", return_value=None),
+            mock.patch.object(desktop, "_available_port", side_effect=lambda h, p: p),
+            mock.patch.object(desktop, "handler_factory", return_value=("H", controller)),
+            mock.patch.object(desktop, "ThreadingHTTPServer", return_value=server),
+            mock.patch.object(desktop, "is_macos", return_value=is_mac),
+        )
+
+    def test_macos_hands_off_to_the_runner_with_the_controller(self):
+        server = _FakeRunServer()
+        controller = object()
+        patches = self._patches(server, is_mac=True, controller=controller)
+        with patches[0], patches[1], patches[2], patches[3], patches[4], \
+                mock.patch.object(desktop, "build_tray") as build_tray, \
+                mock.patch("aparte.macos_runloop.serve_macos") as serve_macos:
+            desktop.run_desktop("127.0.0.1", 8765, Settings(), open_browser=False)
+        serve_macos.assert_called_once()
+        args = serve_macos.call_args.args
+        self.assertIs(args[0], server)
+        self.assertIs(args[1], controller)
+        build_tray.assert_not_called()          # macOS returns before the tray path
+        self.assertFalse(server.serve_forever_called)
+
+    def test_linux_serves_directly_without_the_runner(self):
+        server = _FakeRunServer()
+        patches = self._patches(server, is_mac=False, controller=None)
+        with patches[0], patches[1], patches[2], patches[3], patches[4], \
+                mock.patch.object(desktop, "build_tray", return_value=None), \
+                mock.patch("aparte.macos_runloop.serve_macos") as serve_macos:
+            desktop.run_desktop("127.0.0.1", 8765, Settings(), open_browser=False)
+        serve_macos.assert_not_called()
+        self.assertTrue(server.serve_forever_called)   # main-thread serve, unchanged
+        self.assertTrue(server.closed)                 # finally: server_close
+
+
 if __name__ == "__main__":
     unittest.main()
