@@ -195,5 +195,40 @@ class InstallHotkeyTest(unittest.TestCase):
             self.assertEqual(hotkey.install_hotkey("<Super>space").key, "<Super>space")
 
 
+class MacosHotkeyInfoTest(unittest.TestCase):
+    """On a Mac the shortcut is a config entry the server registers, not a
+    gsettings binding. Reporting the Linux shape made doctor print « bind
+    manually » under a ticked shortcut check, and the web panel warn that a live
+    shortcut was unbound (M8, Big Sur).
+    """
+
+    def _info(self, configured):
+        with mock.patch.object(hotkey, "is_macos", return_value=True):
+            with mock.patch("aparte.config.load_config", return_value={"hotkey": configured}):
+                return hotkey.hotkey_info()
+
+    def test_a_configured_combo_reads_as_bound_with_its_apple_label(self):
+        info = self._info("ctrl+opt+d")
+        self.assertEqual(info["bound_key"], "ctrl+opt+d")
+        self.assertEqual(info["bound_key_label"], "⌃⌥D")
+        self.assertEqual(info["desktop"], "macos")
+        self.assertTrue(info["supported"])
+
+    def test_no_combo_reads_as_unbound_rather_than_defaulting(self):
+        # Empty means opt-in not taken yet — never claim ⌃⌥D is live.
+        info = self._info("")
+        self.assertIsNone(info["bound_key"])
+        self.assertIsNone(info["bound_key_label"])
+
+    def test_a_hand_edited_bad_combo_still_produces_a_label(self):
+        # A label is display only; it must never raise into a diagnostic.
+        self.assertEqual(self._info("ctrl+nope")["bound_key_label"], "ctrl+nope")
+
+    def test_the_linux_shape_is_untouched_off_macos(self):
+        with mock.patch.object(hotkey, "is_macos", return_value=False):
+            with mock.patch.object(hotkey, "current_binding", return_value=None):
+                self.assertEqual(hotkey.hotkey_info()["default_key"], hotkey.DEFAULT_KEY)
+
+
 if __name__ == "__main__":
     unittest.main()

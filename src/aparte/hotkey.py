@@ -22,6 +22,8 @@ import subprocess
 import sys
 from dataclasses import dataclass
 
+from .platform_dispatch import is_macos
+
 DEFAULT_KEY = "<Super>space"
 DEFAULT_NAME = "Aparté dictation"
 # Shortcut installed before the app was renamed from Murmur to Aparté. Matched so
@@ -303,6 +305,8 @@ def current_binding(name: str = DEFAULT_NAME) -> str | None:
 
 def hotkey_info() -> dict:
     """Shortcut status for the desktop diagnostics panel and `aparte doctor`."""
+    if is_macos():
+        return _hotkey_info_macos()
     desktop = detect_desktop()
     bound = current_binding()
     return {
@@ -314,4 +318,33 @@ def hotkey_info() -> dict:
         "default_key_label": key_label(DEFAULT_KEY),
         "bound_key": bound,
         "bound_key_label": key_label(bound) if bound else None,
+    }
+
+
+def _hotkey_info_macos() -> dict:
+    """The same shape, told the macOS way.
+
+    There is no gsettings here: the combo lives in the config file and the
+    running server registers it (M5). Reporting the Linux shape on a Mac made
+    ``doctor`` print « bind manually: python -m aparte toggle » directly under a
+    ticked « Dictation shortcut », and the web panel warn that a live shortcut
+    was unbound (M8, observed on Big Sur).
+
+    ``bound_key`` follows the file, not the registration: whether macOS actually
+    accepted it is the business of ``GET /api/hotkey-state`` and of the ``hotkey``
+    check, which read the live state.
+    """
+    from .config import load_config
+    from .macos_hotkey import DEFAULT_HOTKEY, safe_hotkey_label
+
+    configured = str(load_config().get("hotkey", "") or "")
+    return {
+        "desktop": "macos",
+        "supported": True,
+        "command": toggle_command("paste"),
+        "install_command": install_command(),
+        "default_key": DEFAULT_HOTKEY,
+        "default_key_label": safe_hotkey_label(DEFAULT_HOTKEY),
+        "bound_key": configured or None,
+        "bound_key_label": safe_hotkey_label(configured) if configured else None,
     }
