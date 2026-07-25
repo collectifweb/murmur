@@ -1,0 +1,75 @@
+=== Aparté M8 · étape 6 : dictée et insertion ===
+--- 1/5 relance du serveur (il doit retrouver les autorisations) ---
+serveur relancé
+hotkey-state : {"registered": true, "configured_key": "ctrl+opt+d", "status": null, "error": null}
+
+--- 2/5 doctor après relance (micro et accessibilité doivent être cochés) ---
+
+Transcription
+  ok      Local Whisper backend
+  ok      Speech model downloaded
+
+Microphone
+  ok      Microphone recorder
+  ok      Microphone permission
+
+Insertion
+  ok      Accessibility permission
+  ok      Clipboard copy
+
+System
+  ok      Desktop notifications
+  ok      Config file
+  ok      Dictation shortcut
+
+status  idle
+ready   yes
+hotkey  bind manually: /Users/marie-piergervais/aparte/.venv/bin/python -m aparte toggle --target paste
+
+--- 3/5 préparation de la cible d'insertion ---
+TextEdit ouvert sur un document vide, presse-papier vidé.
+
+--- 4/5 À TOI DE JOUER (2 minutes) ---
+
+  1. Clique dans la fenêtre TextEdit pour lui donner le focus.
+  2. Appuie UNE fois sur Ctrl + Option + D.
+  3. Dis, à voix normale :
+
+        « Il m'a dit que c'est vraiment l'été, n'est-ce pas ? »
+
+  4. Appuie UNE fois sur Ctrl + Option + D pour arrêter.
+  5. Attends : la transcription prend de 10 à 40 secondes sur cette machine.
+     Le texte doit s'écrire TOUT SEUL dans TextEdit.
+  6. Ne touche plus à rien ensuite.
+
+        (il reste 105 s)
+        (il reste 90 s)
+        (il reste 75 s)
+        (il reste 60 s)
+        (il reste 45 s)
+        (il reste 30 s)
+        (il reste 15 s)
+
+--- 5/5 ce qui a été livré ---
+état de l'enregistreur : {"state": "idle"}
+
+texte livré par Aparté (relu dans le presse-papier) :
+---8<---
+Il m’a dit que c’est vraiment l’été, n’est-ce pas ?
+---8<---
+
+typographie francaise :
+  oui  apostrophe courbe U+2019
+  non  apostrophe droite U+0027 (ne devrait plus etre la)
+  oui  espace insecable U+00A0
+  non  espace fine U+202F (interdite dans ce projet)
+  non  guillemet ouvrant U+00AB
+  non  guillemet fermant U+00BB
+
+points de code non alphanumeriques :
+  ESP=U+0020 ’=U+2019 ESP=U+0020 ESP=U+0020 ESP=U+0020 ’=U+2019 ESP=U+0020 ESP=U+0020 ’=U+2019 ,=U+002C ESP=U+0020 ’=U+2019 -=U+002D ESP=U+0020  =U+00A0 ?=U+003F
+
+--- journal du serveur ---
+Aparté desktop running at http://127.0.0.1:8765
+
+=== étape 6 terminée — le serveur reste allumé ===

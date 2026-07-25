@@ -1,0 +1,219 @@
+=== Aparté M8 · étape 1 : installation ===
+ProductName:	macOS
+ProductVersion:	11.7.11
+BuildVersion:	20G1443
+x86_64
+
+--- 1/5 Python 3.11 ---
+                                                                            0.1%                                                                            0.5%                                                                            0.9%                                                                            1.3%#                                                                           1.8%#                                                                           2.5%##                                                                          3.0%##                                                                          3.6%###                                                                         4.3%###                                                                         4.7%####                                                                        5.5%####                                                                        6.3%#####                                                                       7.0%#####                                                                       7.7%######                                                                      8.5%######                                                                      9.2%#######                                                                    10.0%#######                                                                    10.5%########                                                                   11.1%########                                                                   11.6%########                                                                   12.1%#########                                                                  12.8%#########                                                                  13.5%##########                                                                 14.2%##########                                                                 14.6%##########                                                                 14.9%###########                                                                15.2%###########                                                                15.8%############                                                               16.5%############                                                               17.3%#############                                                              17.9%#############                                                              18.8%##############                                                             19.5%##############                                                             20.3%###############                                                            21.2%###############                                                            21.9%################                                                           22.6%#################                                                          23.3%#################                                                          24.1%#################                                                          24.6%##################                                                         25.3%##################                                                         25.8%###################                                                        26.4%###################                                                        27.2%####################                                                       27.6%####################                                                       28.2%#####################                                                      28.9%#####################                                                      29.7%######################                                                     30.3%######################                                                     30.9%#######################                                                    31.6%#######################                                                    32.1%#######################                                                    32.5%########################                                                   33.4%#########################                                                  34.4%#########################                                                  35.0%##########################                                                 35.8%##########################                                                 36.5%###########################                                                37.3%###########################                                                38.3%############################                                               39.3%#############################                                              40.3%##############################                                             41.4%##############################                                             42.1%##############################                                             42.4%###############################                                            43.2%################################                                           44.1%################################                                           44.9%#################################                                          45.7%#################################                                          46.5%##################################                                         47.1%##################################                                         47.6%###################################                                        48.4%###################################                                        49.3%####################################                                       50.0%#####################################                                      50.8%#####################################                                      51.4%#####################################                                      51.8%######################################                                     52.5%######################################                                     53.2%#######################################                                    54.1%#######################################                                    54.7%########################################                                   55.5%########################################                                   55.8%#########################################                                  56.3%#########################################                                  56.6%#########################################                                  57.3%##########################################                                 58.0%###########################################                                59.0%###########################################                                59.7%############################################                               60.8%#############################################                              61.8%#############################################                              62.8%##############################################                             64.0%###############################################                            64.6%###############################################                            65.2%################################################                           66.1%################################################                           67.1%#################################################                          68.0%##################################################                         68.6%##################################################                         69.1%###################################################                        70.0%###################################################                        70.6%###################################################                        71.1%####################################################                       71.7%####################################################                       72.2%#####################################################                      72.8%#####################################################                      73.1%#####################################################                      73.4%#####################################################                      73.7%######################################################                     74.1%######################################################                     74.5%######################################################                     74.7%######################################################                     75.3%#######################################################                    75.8%#######################################################                    76.4%########################################################                   77.0%########################################################                   77.6%#########################################################                  78.3%#########################################################                  79.0%##########################################################                 79.6%##########################################################                 80.2%##########################################################                 80.5%##########################################################                 80.8%###########################################################                81.5%###########################################################                82.2%############################################################               82.9%#############################################################              83.6%#############################################################              84.2%#############################################################              84.7%##############################################################             85.3%##############################################################             86.0%###############################################################            86.6%###############################################################            87.2%################################################################           87.9%################################################################           88.4%################################################################           88.9%#################################################################          89.5%#################################################################          90.1%##################################################################         90.6%##################################################################         91.2%##################################################################         91.6%###################################################################        91.9%###################################################################        92.5%###################################################################        93.0%####################################################################       93.6%####################################################################       94.1%#####################################################################      94.7%#####################################################################      95.2%#####################################################################      95.8%######################################################################     96.3%######################################################################     96.9%#######################################################################    97.4%#######################################################################    98.0%#######################################################################    98.5%########################################################################   99.2%########################################################################   99.6%########################################################################  100.0%######################################################################### 100.0%
+
+>>> Tape le mot de passe de ta session Mac (rien ne s'affiche pendant la saisie) :
+installer: Package name is Python
+installer: Installing at base path /
+installer: The install was successful.
+Python 3.11.9
+
+--- 2/5 code source (branche feat/portage-macos) ---
+#=#=#                                                                          ##O#- #                                                                        ##O=#  #                                                                       #-#O=#  #                                                                       #-#O=#   #                                                                      #-#O=-#   #                                                                     #-=#=-#    #                                                                
+version installée : __all__ = ["__version__"]
+
+--- 3/5 environnement + paquets (quelques minutes) ---
+Obtaining file:///Users/marie-piergervais/aparte
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Collecting requests>=2.31 (from aparte==1.1.1)
+  Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+Collecting faster-whisper>=1.0.2 (from aparte==1.1.1)
+  Downloading faster_whisper-1.2.1-py3-none-any.whl.metadata (16 kB)
+Collecting sounddevice>=0.4 (from aparte==1.1.1)
+  Downloading sounddevice-0.5.5-py3-none-macosx_10_6_x86_64.macosx_10_6_universal2.whl.metadata (1.4 kB)
+Collecting soundfile>=0.12 (from aparte==1.1.1)
+  Downloading soundfile-0.14.0-py2.py3-none-macosx_10_9_x86_64.whl.metadata (18 kB)
+Collecting pyobjc-framework-Quartz (from aparte==1.1.1)
+  Downloading pyobjc_framework_quartz-12.2.1-cp311-cp311-macosx_10_9_universal2.whl.metadata (3.6 kB)
+Collecting pyobjc-framework-Cocoa (from aparte==1.1.1)
+  Downloading pyobjc_framework_cocoa-12.2.1-cp311-cp311-macosx_10_9_universal2.whl.metadata (2.6 kB)
+Collecting pyobjc-framework-AVFoundation (from aparte==1.1.1)
+  Downloading pyobjc_framework_avfoundation-12.2.1-cp311-cp311-macosx_10_9_universal2.whl.metadata (2.7 kB)
+Collecting pyobjc-framework-ApplicationServices (from aparte==1.1.1)
+  Downloading pyobjc_framework_applicationservices-12.2.1-cp311-cp311-macosx_10_9_universal2.whl.metadata (2.8 kB)
+Collecting rumps (from aparte==1.1.1)
+  Downloading rumps-0.4.0.tar.gz (39 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting quickmachotkey (from aparte==1.1.1)
+  Downloading quickmachotkey-2025.7.28-py3-none-any.whl.metadata (1.5 kB)
+Collecting ctranslate2<5,>=4.0 (from faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading ctranslate2-4.8.1-cp311-cp311-macosx_11_0_x86_64.whl.metadata (11 kB)
+Collecting huggingface-hub>=0.21 (from faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading huggingface_hub-1.24.0-py3-none-any.whl.metadata (16 kB)
+Collecting tokenizers<1,>=0.13 (from faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading tokenizers-0.23.1-cp310-abi3-macosx_10_12_x86_64.whl.metadata (9.8 kB)
+Collecting onnxruntime<2,>=1.14 (from faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading onnxruntime-1.19.2-cp311-cp311-macosx_11_0_universal2.whl.metadata (4.5 kB)
+Collecting av>=11 (from faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading av-18.0.0-cp311-abi3-macosx_11_0_x86_64.whl.metadata (4.5 kB)
+Collecting tqdm (from faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading tqdm-4.69.1-py3-none-any.whl.metadata (57 kB)
+Requirement already satisfied: setuptools in ./.venv/lib/python3.11/site-packages (from ctranslate2<5,>=4.0->faster-whisper>=1.0.2->aparte==1.1.1) (65.5.0)
+Collecting numpy (from ctranslate2<5,>=4.0->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading numpy-2.4.6-cp311-cp311-macosx_10_9_x86_64.whl.metadata (6.6 kB)
+Collecting pyyaml<7,>=5.3 (from ctranslate2<5,>=4.0->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading pyyaml-6.0.3-cp311-cp311-macosx_10_13_x86_64.whl.metadata (2.4 kB)
+Collecting coloredlogs (from onnxruntime<2,>=1.14->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading coloredlogs-15.0.1-py2.py3-none-any.whl.metadata (12 kB)
+Collecting flatbuffers (from onnxruntime<2,>=1.14->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading flatbuffers-25.12.19-py2.py3-none-any.whl.metadata (1.0 kB)
+Collecting packaging (from onnxruntime<2,>=1.14->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading packaging-26.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting protobuf (from onnxruntime<2,>=1.14->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading protobuf-7.35.1-cp310-abi3-macosx_10_9_universal2.whl.metadata (595 bytes)
+Collecting sympy (from onnxruntime<2,>=1.14->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading sympy-1.14.0-py3-none-any.whl.metadata (12 kB)
+Collecting click<9.0.0,>=8.4.2 (from huggingface-hub>=0.21->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading click-8.4.2-py3-none-any.whl.metadata (2.6 kB)
+Collecting filelock>=3.10.0 (from huggingface-hub>=0.21->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading filelock-3.32.0-py3-none-any.whl.metadata (2.0 kB)
+Collecting fsspec>=2023.5.0 (from huggingface-hub>=0.21->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading fsspec-2026.6.0-py3-none-any.whl.metadata (10 kB)
+Collecting hf-xet<2.0.0,>=1.5.1 (from huggingface-hub>=0.21->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading hf_xet-1.5.2-cp38-abi3-macosx_10_12_x86_64.whl.metadata (4.9 kB)
+Collecting httpx<1,>=0.23.0 (from huggingface-hub>=0.21->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting typing-extensions>=4.1.0 (from huggingface-hub>=0.21->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting anyio (from httpx<1,>=0.23.0->huggingface-hub>=0.21->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading anyio-4.14.2-py3-none-any.whl.metadata (4.6 kB)
+Collecting certifi (from httpx<1,>=0.23.0->huggingface-hub>=0.21->faster-whisper>=1.0.2->aparte==1.1.1)
+  Using cached certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+Collecting httpcore==1.* (from httpx<1,>=0.23.0->huggingface-hub>=0.21->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting idna (from httpx<1,>=0.23.0->huggingface-hub>=0.21->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading idna-3.18-py3-none-any.whl.metadata (6.1 kB)
+Collecting h11>=0.16 (from httpcore==1.*->httpx<1,>=0.23.0->huggingface-hub>=0.21->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting charset_normalizer<4,>=2 (from requests>=2.31->aparte==1.1.1)
+  Downloading charset_normalizer-3.4.9-cp311-cp311-macosx_10_9_universal2.whl.metadata (41 kB)
+Collecting urllib3<3,>=1.26 (from requests>=2.31->aparte==1.1.1)
+  Downloading urllib3-2.7.0-py3-none-any.whl.metadata (6.9 kB)
+Collecting cffi (from sounddevice>=0.4->aparte==1.1.1)
+  Downloading cffi-2.1.0-cp311-cp311-macosx_10_15_x86_64.whl.metadata (2.5 kB)
+Collecting pycparser (from cffi->sounddevice>=0.4->aparte==1.1.1)
+  Downloading pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+Collecting humanfriendly>=9.1 (from coloredlogs->onnxruntime<2,>=1.14->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading humanfriendly-10.0-py2.py3-none-any.whl.metadata (9.2 kB)
+Collecting pyobjc-core>=12.2.1 (from pyobjc-framework-ApplicationServices->aparte==1.1.1)
+  Downloading pyobjc_core-12.2.1-cp311-cp311-macosx_10_9_universal2.whl.metadata (2.8 kB)
+Collecting pyobjc-framework-CoreText>=12.2.1 (from pyobjc-framework-ApplicationServices->aparte==1.1.1)
+  Downloading pyobjc_framework_coretext-12.2.1-cp311-cp311-macosx_10_9_universal2.whl.metadata (2.8 kB)
+Collecting pyobjc-framework-CoreMedia>=12.2.1 (from pyobjc-framework-AVFoundation->aparte==1.1.1)
+  Downloading pyobjc_framework_coremedia-12.2.1-cp311-cp311-macosx_10_9_universal2.whl.metadata (2.5 kB)
+Collecting pyobjc-framework-CoreAudio>=12.2.1 (from pyobjc-framework-AVFoundation->aparte==1.1.1)
+  Downloading pyobjc_framework_coreaudio-12.2.1-cp311-cp311-macosx_10_9_universal2.whl.metadata (2.5 kB)
+Collecting mpmath<1.4,>=1.1.0 (from sympy->onnxruntime<2,>=1.14->faster-whisper>=1.0.2->aparte==1.1.1)
+  Downloading mpmath-1.3.0-py3-none-any.whl.metadata (8.6 kB)
+Downloading faster_whisper-1.2.1-py3-none-any.whl (1.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 3.5 MB/s  0:00:00
+Downloading ctranslate2-4.8.1-cp311-cp311-macosx_11_0_x86_64.whl (11.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.9/11.9 MB 2.9 MB/s  0:00:04
+Downloading onnxruntime-1.19.2-cp311-cp311-macosx_11_0_universal2.whl (16.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.8/16.8 MB 3.1 MB/s  0:00:05
+Downloading pyyaml-6.0.3-cp311-cp311-macosx_10_13_x86_64.whl (185 kB)
+Downloading tokenizers-0.23.1-cp310-abi3-macosx_10_12_x86_64.whl (3.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.1/3.1 MB 4.5 MB/s  0:00:01
+Downloading huggingface_hub-1.24.0-py3-none-any.whl (771 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 771.9/771.9 kB 2.2 MB/s  0:00:00
+Downloading click-8.4.2-py3-none-any.whl (119 kB)
+Downloading hf_xet-1.5.2-cp38-abi3-macosx_10_12_x86_64.whl (4.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.0/4.0 MB 3.4 MB/s  0:00:01
+Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+Downloading av-18.0.0-cp311-abi3-macosx_11_0_x86_64.whl (22.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 22.5/22.5 MB 2.8 MB/s  0:00:08
+Downloading filelock-3.32.0-py3-none-any.whl (97 kB)
+Downloading fsspec-2026.6.0-py3-none-any.whl (203 kB)
+Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+Downloading numpy-2.4.6-cp311-cp311-macosx_10_9_x86_64.whl (17.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 17.0/17.0 MB 2.8 MB/s  0:00:06
+Downloading packaging-26.2-py3-none-any.whl (100 kB)
+Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+Downloading charset_normalizer-3.4.9-cp311-cp311-macosx_10_9_universal2.whl (317 kB)
+Downloading idna-3.18-py3-none-any.whl (65 kB)
+Downloading urllib3-2.7.0-py3-none-any.whl (131 kB)
+Using cached certifi-2026.7.22-py3-none-any.whl (136 kB)
+Downloading sounddevice-0.5.5-py3-none-macosx_10_6_x86_64.macosx_10_6_universal2.whl (108 kB)
+Downloading soundfile-0.14.0-py2.py3-none-macosx_10_9_x86_64.whl (1.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 2.9 MB/s  0:00:00
+Downloading cffi-2.1.0-cp311-cp311-macosx_10_15_x86_64.whl (183 kB)
+Downloading tqdm-4.69.1-py3-none-any.whl (675 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 675.5/675.5 kB 2.5 MB/s  0:00:00
+Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Downloading anyio-4.14.2-py3-none-any.whl (125 kB)
+Downloading coloredlogs-15.0.1-py2.py3-none-any.whl (46 kB)
+Downloading humanfriendly-10.0-py2.py3-none-any.whl (86 kB)
+Downloading flatbuffers-25.12.19-py2.py3-none-any.whl (26 kB)
+Downloading protobuf-7.35.1-cp310-abi3-macosx_10_9_universal2.whl (433 kB)
+Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+Downloading pyobjc_framework_applicationservices-12.2.1-cp311-cp311-macosx_10_9_universal2.whl (32 kB)
+Downloading pyobjc_core-12.2.1-cp311-cp311-macosx_10_9_universal2.whl (6.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.5/6.5 MB 3.5 MB/s  0:00:02
+Downloading pyobjc_framework_cocoa-12.2.1-cp311-cp311-macosx_10_9_universal2.whl (387 kB)
+Downloading pyobjc_framework_coretext-12.2.1-cp311-cp311-macosx_10_9_universal2.whl (30 kB)
+Downloading pyobjc_framework_quartz-12.2.1-cp311-cp311-macosx_10_9_universal2.whl (217 kB)
+Downloading pyobjc_framework_avfoundation-12.2.1-cp311-cp311-macosx_10_9_universal2.whl (85 kB)
+Downloading pyobjc_framework_coreaudio-12.2.1-cp311-cp311-macosx_10_9_universal2.whl (35 kB)
+Downloading pyobjc_framework_coremedia-12.2.1-cp311-cp311-macosx_10_9_universal2.whl (29 kB)
+Downloading quickmachotkey-2025.7.28-py3-none-any.whl (9.9 kB)
+Downloading sympy-1.14.0-py3-none-any.whl (6.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.3/6.3 MB 2.1 MB/s  0:00:02
+Downloading mpmath-1.3.0-py3-none-any.whl (536 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 536.2/536.2 kB 3.5 MB/s  0:00:00
+Building wheels for collected packages: aparte, rumps
+  Building editable for aparte (pyproject.toml): started
+  Building editable for aparte (pyproject.toml): finished with status 'done'
+  Created wheel for aparte: filename=aparte-1.1.1-0.editable-py3-none-any.whl size=15187 sha256=38e845ae2c4fb5c4d21f044dd5f85b51825a4f88e6f3d8bab247defd4ec470e7
+  Stored in directory: /private/var/folders/20/kb6m4r2934b3_lxxrdv4lljw0000gn/T/pip-ephem-wheel-cache-yqa40zup/wheels/c9/6e/43/a7b5ba9dcc9cfbad3ee737e7b884e3cf0284c5ab5d09b88f38
+  Building wheel for rumps (pyproject.toml): started
+  Building wheel for rumps (pyproject.toml): finished with status 'done'
+  Created wheel for rumps: filename=rumps-0.4.0-py3-none-any.whl size=31934 sha256=373004e7c45d0807ac35b93c6da89cfc31d921839d7f1e8c62f4a920b92328ab
+  Stored in directory: /Users/marie-piergervais/Library/Caches/pip/wheels/31/07/52/593c72dc8202514fd3655f39bb873964f4edf40f9afc9b3d64
+Successfully built aparte rumps
+Installing collected packages: mpmath, flatbuffers, urllib3, typing-extensions, tqdm, sympy, pyyaml, pyobjc-core, pycparser, protobuf, packaging, numpy, idna, humanfriendly, hf-xet, h11, fsspec, filelock, click, charset_normalizer, certifi, av, requests, pyobjc-framework-Cocoa, httpcore, ctranslate2, coloredlogs, cffi, anyio, soundfile, sounddevice, rumps, quickmachotkey, pyobjc-framework-Quartz, pyobjc-framework-CoreMedia, pyobjc-framework-CoreAudio, onnxruntime, httpx, aparte, pyobjc-framework-CoreText, pyobjc-framework-AVFoundation, huggingface-hub, tokenizers, pyobjc-framework-ApplicationServices, faster-whisper
+
+Successfully installed anyio-4.14.2 aparte-1.1.1 av-18.0.0 certifi-2026.7.22 cffi-2.1.0 charset_normalizer-3.4.9 click-8.4.2 coloredlogs-15.0.1 ctranslate2-4.8.1 faster-whisper-1.2.1 filelock-3.32.0 flatbuffers-25.12.19 fsspec-2026.6.0 h11-0.16.0 hf-xet-1.5.2 httpcore-1.0.9 httpx-0.28.1 huggingface-hub-1.24.0 humanfriendly-10.0 idna-3.18 mpmath-1.3.0 numpy-2.4.6 onnxruntime-1.19.2 packaging-26.2 protobuf-7.35.1 pycparser-3.0 pyobjc-core-12.2.1 pyobjc-framework-AVFoundation-12.2.1 pyobjc-framework-ApplicationServices-12.2.1 pyobjc-framework-Cocoa-12.2.1 pyobjc-framework-CoreAudio-12.2.1 pyobjc-framework-CoreMedia-12.2.1 pyobjc-framework-CoreText-12.2.1 pyobjc-framework-Quartz-12.2.1 pyyaml-6.0.3 quickmachotkey-2025.7.28 requests-2.34.2 rumps-0.4.0 sounddevice-0.5.5 soundfile-0.14.0 sympy-1.14.0 tokenizers-0.23.1 tqdm-4.69.1 typing-extensions-4.16.0 urllib3-2.7.0
+
+--- 4/5 vérifications natives ---
+AppKit + Carbon : OK
+PortAudio : PortAudio V19.7.0-devel, revision unknown
+aparte                               1.1.1     /Users/marie-piergervais/aparte
+av                                   18.0.0
+ctranslate2                          4.8.1
+faster-whisper                       1.2.1
+numpy                                2.4.6
+onnxruntime                          1.19.2
+pyobjc-core                          12.2.1
+pyobjc-framework-ApplicationServices 12.2.1
+pyobjc-framework-AVFoundation        12.2.1
+pyobjc-framework-Cocoa               12.2.1
+pyobjc-framework-CoreAudio           12.2.1
+pyobjc-framework-CoreMedia           12.2.1
+pyobjc-framework-CoreText            12.2.1
+pyobjc-framework-Quartz              12.2.1
+rumps                                0.4.0
+sounddevice                          0.5.5
+soundfile                            0.14.0
+
+--- 5/5 version d'Aparté ---
+aparte 1.1.1
+
+=== étape 1 terminée ===

@@ -1,0 +1,31 @@
+=== Aparté M8 · étape 5 : modèle et autorisations ===
+--- 1/5 état de départ ---
+micro         : not_determined
+accessibilite : False
+
+--- 2/5 modèle Whisper « small » (~500 Mo, une seule fois) ---
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+modele pret en 125.5 s
+
+--- 3/5 micro : ouverture réelle du flux (le chemin du produit) ---
+>>> UNE FENÊTRE VA SANS DOUTE S'AFFICHER : clique « OK » pour autoriser le micro.
+flux micro ouvert puis refermé sans erreur
+micro apres ouverture du flux : not_determined
+
+--- 4/5 micro : demande explicite si la première n'a rien donné ---
+reponse de la fenetre : True
+micro apres demande explicite : authorized
+
+--- 5/5 accessibilité (nécessaire pour insérer le texte) ---
+>>> UNE FENÊTRE VA S'AFFICHER : clique « Ouvrir les Préférences Système »,
+>>> puis dans Sécurité et confidentialité → Confidentialité → Accessibilité :
+>>>   - clique le CADENAS en bas à gauche et tape ton mot de passe,
+>>>   - COCHE la case « Terminal » dans la liste.
+demande de confiance : False
+(45 secondes pour faire la manipulation…)
+
+--- état final ---
+micro         : authorized
+accessibilite : True
+
+=== étape 5 terminée ===

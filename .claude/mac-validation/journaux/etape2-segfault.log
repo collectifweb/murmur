@@ -1,0 +1,18 @@
+=== Aparté M8 · étape 2 : diagnostic du raccourci ===
+
+Ce test inscrit le raccourci Ctrl+Option+D en direct et affiche chaque
+événement que macOS lui livre. Il s'arrête TOUT SEUL au bout de 75 secondes —
+ne fais pas Ctrl-C, ça couperait l'envoi du journal.
+
+À FAIRE (l'application au premier plan n'a aucune importance) :
+
+  1. Attends la ligne « registered ».
+  2. Appuie UNE fois sur Ctrl + Option + D.   Attends 3 secondes.
+  3. Appuie UNE fois.                          Attends 3 secondes.
+  4. Appuie UNE fois.                          Attends 3 secondes.
+  5. Appuie DEUX fois très vite (comme un double-clic).
+  6. Ne touche plus à rien jusqu'à la fin du compte à rebours.
+
+/Users/marie-piergervais/aparte-m8/step.sh: line 28:  2284 Segmentation fault: 11  ./.venv/bin/aparte install-hotkey --diagnostic
+
+=== étape 2 terminée ===

@@ -1,0 +1,48 @@
+=== Aparté M8 · étape 7 : double-appui rapide ===
+--- 1/4 activation du bip (réglage relu à chaque enregistrement) ---
+beep en config : True
+
+--- 2/4 CE QUE TU VAS FAIRE ---
+
+  Dans 10 secondes, un DOUBLE-APPUI TRÈS RAPIDE sur Ctrl+Option+D,
+  comme un double-clic de souris. Puis tu dis : « un, deux, trois ».
+
+  Ce qu'on veut prouver : le deuxième appui est avalé, et l'enregistrement
+  RESTE actif. S'il s'arrêtait aussitôt, le bogue serait de retour.
+
+  double-appui dans 10 s   double-appui dans  9 s   double-appui dans  8 s   double-appui dans  7 s   double-appui dans  6 s   double-appui dans  5 s   double-appui dans  4 s   double-appui dans  3 s   double-appui dans  2 s   double-appui dans  1 s 
+
+>>> MAINTENANT : double-appui rapide, puis dis « un, deux, trois ».
+
+  t+1s  {"state": "idle"}
+  t+2s  {"state": "processing"}
+  t+3s  {"state": "idle"}
+  t+4s  {"state": "idle"}
+  t+5s  {"state": "idle"}
+  t+6s  {"state": "idle"}
+  t+7s  {"state": "idle"}
+  t+8s  {"state": "idle"}
+  t+9s  {"state": "idle"}
+  t+10s  {"state": "recording"}
+  t+11s  {"state": "recording"}
+  t+12s  {"state": "processing"}
+  t+13s  {"state": "processing"}
+  t+14s  {"state": "processing"}
+  t+15s  {"state": "processing"}
+
+>>> Appuie UNE SEULE fois sur Ctrl+Option+D pour arrêter.
+
+  t+1s  {"state": "processing"}
+  t+2s  {"state": "idle"}
+  t+3s  {"state": "idle"}
+  t+4s  {"state": "idle"}
+
+--- 3/4 texte livré ---
+---8<---
+1, 2, 3.
+---8<---
+
+--- 4/4 journal du serveur ---
+Aparté desktop running at http://127.0.0.1:8765
+
+=== étape 7 terminée ===

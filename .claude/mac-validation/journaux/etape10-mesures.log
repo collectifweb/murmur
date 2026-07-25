@@ -1,0 +1,52 @@
+=== Aparté M8 · étape 10 : mesures ===
+--- 1/4 le bip : avant, pendant et après l'ouverture du micro ---
+>>> Garde le son allumé. Tu devrais entendre jusqu'à quatre sons.
+  avant tout import audio      code=0  duree=0.42s  err=''
+  apres import sounddevice     code=0  duree=0.36s  err=''
+  flux construit, pas demarre  code=0  duree=0.37s  err=''
+  flux DEMARRE (cas reel)      code=0  duree=0.37s  err=''
+
+--- 2/4 le même essai, mais dans le processus du serveur ---
+(le serveur a chargé Whisper et OpenMP ; c'est la seule différence)
+  apres chargement d'OpenMP : code=0 err=''
+
+--- 3/4 répartiteur instrumenté (temporaire, non versionné) ---
+serveur relancé, chaque appui sera désormais journalisé avec son écart.
+
+--- 4/4 TROIS DOUBLES-APPUIS, DU PLUS RAPIDE AU PLUS LENT ---
+
+  Ne parle pas, ne t'occupe pas de ce qui s'affiche. Fais seulement :
+
+    - un double-appui AUSSI RAPIDE QUE POSSIBLE   ... attends 6 secondes
+    - un double-appui rapide mais confortable      ... attends 6 secondes
+    - un double-appui à ta vitesse naturelle
+
+  Chaque appui sera mesuré et étiqueté ACCEPTE ou IGNORE. C'est ce tableau
+  qui décidera de la valeur du filtre.
+
+  premier double-appui dans  6 s   premier double-appui dans  5 s   premier double-appui dans  4 s   premier double-appui dans  3 s   premier double-appui dans  2 s   premier double-appui dans  1 s 
+>>> VAS-Y.
+
+--- ce que le répartiteur a vu ---
+[hotkey] appui premier -> ACCEPTE
+[hotkey] appui +0.200s -> IGNORE (fenetre 0.25s)
+[hotkey] appui +1.464s -> ACCEPTE
+[hotkey] appui +7.200s -> ACCEPTE
+[hotkey] appui +2.089s -> ACCEPTE
+[hotkey] appui +1.544s -> ACCEPTE
+[hotkey] appui +7.704s -> ACCEPTE
+[hotkey] appui +2.832s -> ACCEPTE
+
+--- journal complet du serveur ---
+Aparté desktop running at http://127.0.0.1:8765
+[hotkey] appui premier -> ACCEPTE
+[hotkey] appui +0.200s -> IGNORE (fenetre 0.25s)
+[hotkey] appui +1.464s -> ACCEPTE
+[hotkey] appui +7.200s -> ACCEPTE
+OMP: Warning #191: Forking a process while a parallel region is active is potentially unsafe.
+[hotkey] appui +2.089s -> ACCEPTE
+[hotkey] appui +1.544s -> ACCEPTE
+[hotkey] appui +7.704s -> ACCEPTE
+[hotkey] appui +2.832s -> ACCEPTE
+
+=== étape 10 terminée ===

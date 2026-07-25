@@ -1,0 +1,61 @@
+=== Aparté M8 · étape 9 ===
+--- 1/5 serveur remis à neuf (⌃⌥D, bip actif) ---
+hotkey-state : {"registered": true, "configured_key": "ctrl+opt+d", "status": null, "error": null}
+beep vu par le serveur : True
+
+--- 2/5 le bip, tout seul ---
+lecteur afplay : /usr/bin/afplay
+>>> MONTE LE SON. Deux sons vont être joués, un aigu puis un grave.
+  start: /var/folders/20/kb6m4r2934b3_lxxrdv4lljw0000gn/T/aparte-501-beep-start.wav (7982 octets)
+  stop: /var/folders/20/kb6m4r2934b3_lxxrdv4lljw0000gn/T/aparte-501-beep-stop.wav (7982 octets)
+>>> As-tu entendu ces deux sons ? (retiens la réponse)
+
+--- 3/5 DOUBLE-APPUI, LE VRAI (checklist 5) ---
+
+  Cette fois, les deux appuis AUSSI RAPPROCHÉS QUE POSSIBLE — comme quand tu
+  avais fait 216 ms au diagnostic. Colle-les. Puis dis « un, deux, trois ».
+
+  Attendu : l'enregistrement démarre ET RESTE actif. Si le second appui
+  passait, il arrêterait ce que le premier vient de lancer.
+
+  dans  8 s   dans  7 s   dans  6 s   dans  5 s   dans  4 s   dans  3 s   dans  2 s   dans  1 s 
+>>> MAINTENANT : les deux appuis collés, puis parle.
+  t+1s  {"state": "idle"}
+  t+2s  {"state": "processing"}
+  t+3s  {"state": "idle"}
+  t+4s  {"state": "idle"}
+  t+5s  {"state": "recording"}
+  t+6s  {"state": "processing"}
+  t+7s  {"state": "processing"}
+  t+8s  {"state": "processing"}
+  t+9s  {"state": "processing"}
+  t+10s  {"state": "processing"}
+  t+11s  {"state": "processing"}
+  t+12s  {"state": "processing"}
+
+>>> Appuie UNE fois pour arrêter.
+  t+1s  {"state": "idle"}
+  t+2s  {"state": "idle"}
+  t+3s  {"state": "idle"}
+  t+4s  {"state": "idle"}
+
+texte livré : Thank you.
+
+--- 4/5 refus d'inscription : un SECOND Aparté réclame le même raccourci ---
+>>> REGARDE EN HAUT À DROITE : une notification doit surgir.
+second serveur vivant : oui
+sa page d'accueil     : HTTP 200
+son hotkey-state      : {"registered": true, "configured_key": "ctrl+opt+d", "status": null, "error": null}
+--- ce que le second a écrit ---
+Aparté desktop running at http://127.0.0.1:8766
+
+l'original tient-il toujours ? {"registered": true, "configured_key": "ctrl+opt+d", "status": null, "error": null}
+/Users/marie-piergervais/aparte-m8/step.sh: line 79:  2884 Terminated: 15          nohup ./.venv/bin/aparte desktop --port 8766 --no-browser > "$HOME/aparte-m8/desktop-2.log" 2>&1 < /dev/null
+second serveur arrêté.
+
+--- 5/5 journal du serveur principal ---
+Aparté desktop running at http://127.0.0.1:8765
+OMP: Warning #191: Forking a process while a parallel region is active is potentially unsafe.
+OMP: Warning #191: Forking a process while a parallel region is active is potentially unsafe.
+
+=== étape 9 terminée ===

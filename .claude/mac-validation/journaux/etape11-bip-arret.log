@@ -1,0 +1,59 @@
+=== Aparté M8 · étape 11 ===
+--- 1/5 remise du répartiteur propre, enregistreur instrumenté ---
+hotkey-state : {"registered": true, "configured_key": "ctrl+opt+d", "status": null, "error": null}
+
+--- 2/5 UNE DICTÉE ORDINAIRE, SON ALLUMÉ ---
+
+  1. UN appui sur Ctrl+Option+D.
+  2. Dis « bonjour, ceci est un essai ».
+  3. UN appui pour arrêter.
+  4. Écoute : y a-t-il un son à l'ouverture, un autre à la fermeture ?
+
+  vas-y dans  6 s   vas-y dans  5 s   vas-y dans  4 s   vas-y dans  3 s   vas-y dans  2 s   vas-y dans  1 s 
+>>> MAINTENANT.
+
+--- ce que l'enregistreur a dit du bip ---
+[beep] au demarrage, settings.beep=True
+[beep] start: joue en 0.34s
+[beep] a l'arret, settings.beep=True
+[beep] stop: joue en 0.34s
+
+texte livré : Bonjour, ceci est un essai.
+
+--- 3/5 CHECKLIST 7 : ARRÊT PENDANT UN ENREGISTREMENT ---
+
+  1. UN appui sur Ctrl+Option+D pour DÉMARRER.
+  2. Parle, et surtout N'ARRÊTE PAS. Le script va tuer le serveur en plein
+     enregistrement pour voir ce qu'il laisse derrière lui.
+
+  démarre dans  6 s   démarre dans  5 s   démarre dans  4 s   démarre dans  3 s   démarre dans  2 s   démarre dans  1 s 
+>>> DÉMARRE MAINTENANT, et laisse tourner.
+état avant l'arrêt : {"state": "recording"}
+envoi de SIGINT au pid 3280
+
+--- 4/5 ce qui reste derrière ---
+processus aparte encore vivants : 0
+processus afplay orphelins       : 0
+le port 8765 répond-il encore ?  : 000plus rien
+fichiers wav laissés dans /tmp   :
+-rw-------  1 marie-piergervais  staff  542300 25 jul 18:27 /var/folders/20/kb6m4r2934b3_lxxrdv4lljw0000gn/T//aparte-0o0dwnlt.wav
+-rw-r--r--  1 marie-piergervais  staff    7982 25 jul 15:54 /var/folders/20/kb6m4r2934b3_lxxrdv4lljw0000gn/T//aparte-501-beep-start.wav
+-rw-r--r--  1 marie-piergervais  staff    7982 25 jul 15:54 /var/folders/20/kb6m4r2934b3_lxxrdv4lljw0000gn/T//aparte-501-beep-stop.wav
+-rw-------  1 marie-piergervais  staff   59246 25 jul 18:43 /var/folders/20/kb6m4r2934b3_lxxrdv4lljw0000gn/T//aparte-xwq1fatv.wav
+
+--- fin du journal ---
+Aparté desktop running at http://127.0.0.1:8765
+[beep] au demarrage, settings.beep=True
+[beep] start: joue en 0.34s
+[beep] a l'arret, settings.beep=True
+[beep] stop: joue en 0.34s
+[beep] au demarrage, settings.beep=True
+[beep] start: joue en 0.45s
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
+
+--- 5/5 remise du code propre ---
+  macos_hotkey.py : propre
+  macos_recording.py : propre
+
+=== étape 11 terminée ===

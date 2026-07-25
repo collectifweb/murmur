@@ -1,0 +1,32 @@
+=== Aparté M8 · étape 3 ===
+--- 1/3 preuve de la cause (on lit un pointeur, on ne s'en sert pas) ---
+pointeur reel      : 0x00007ffc9f816590
+suppose par ctypes : -0x0000000607e9a70
+identiques         : False
+
+--- 2/3 correctif du pont Carbon ---
+correctif appliqué (     557 lignes)
+
+--- 3/3 diagnostic du raccourci ---
+
+Mêmes consignes qu'à l'étape 2. Arrêt automatique au bout de 75 s, pas de Ctrl-C.
+
+  1. Attends la ligne « registered ».
+  2. Ctrl + Option + D, UNE fois.   Attends 3 secondes.
+  3. UNE fois.                       Attends 3 secondes.
+  4. UNE fois.                       Attends 3 secondes.
+  5. DEUX fois très vite.
+  6. Ne touche plus à rien.
+
+registered ⌃⌥D (ctrl+opt+d) — press it; Ctrl-C to stop
+press #1 received
+press #2 received  (+8.344s since last)
+        (il reste 60 s)
+press #3 received  (+5.024s since last)
+press #4 received  (+5.296s since last)
+press #5 received  (+0.216s since last)
+        (il reste 45 s)
+        (il reste 30 s)
+        (il reste 15 s)
+
+=== étape 3 terminée ===

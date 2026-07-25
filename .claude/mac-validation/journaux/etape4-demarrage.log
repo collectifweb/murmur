@@ -1,0 +1,53 @@
+=== Aparté M8 · étape 4 : démarrage et raccourci ===
+--- 1/6 raccourci persisté dans la configuration ---
+Set the dictation shortcut to ⌃⌥D  (ctrl+opt+d).
+It takes effect when Aparté (re)starts, and works only while it runs.
+hotkey en config : 'ctrl+opt+d'
+
+--- 2/6 démarrage du serveur (run loop AppKit sur le fil principal) ---
+serveur vivant (pid 2399)
+--- ce qu'il a écrit au démarrage ---
+Aparté desktop running at http://127.0.0.1:8765
+
+--- 3/6 l'interface web répond-elle ? ---
+page d'accueil : HTTP 200
+{"model": "small", "default_style": "neutral", "cleanup_level": "medium", "language": null, "device": "auto", "polish_backend": "heuristic", "nonbreaking_spaces": true, "trailing_space": false, "numbe
+
+--- 4/6 état du raccourci (lecture seule) ---
+hotkey-state    : {"registered": true, "configured_key": "ctrl+opt+d", "status": null, "error": null}
+recording-state : {"state": "idle"}
+
+--- 5/6 les routes à effet système doivent être fermées sur macOS (404) ---
+POST /api/paste -> HTTP 404
+POST /api/copy -> HTTP 404
+POST /api/update/apply -> HTTP 404
+
+--- 6/6 doctor ---
+
+Transcription
+  ok      Local Whisper backend
+  missing Speech model downloaded
+
+Microphone
+  ok      Microphone recorder
+  missing Microphone permission
+
+Insertion
+  missing Accessibility permission
+  ok      Clipboard copy
+
+System
+  ok      Desktop notifications
+  ok      Config file
+  ok      Dictation shortcut
+
+status  idle
+ready   no — see fixes below
+hotkey  bind manually: /Users/marie-piergervais/aparte/.venv/bin/python -m aparte toggle --target paste
+
+Next steps:
+- Speech model downloaded: downloaded once on first use, then offline
+- Microphone permission (required): managed in System Settings → Privacy & Security → Microphone
+- Accessibility permission: for paste; managed in System Settings → Privacy & Security → Accessibility
+
+=== étape 4 terminée — le serveur reste allumé ===

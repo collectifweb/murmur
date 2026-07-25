@@ -1,0 +1,73 @@
+=== Aparté M8 · étape 8 : mesure et combinaison réservée ===
+--- 1/5 arrêt du serveur (il détient ⌃⌥D) ---
+pid 2584, envoi de SIGINT (l'équivalent d'un Ctrl-C)
+arrêté par SIGINT
+--- fin du journal du serveur (y a-t-il eu un arrêt ordonné ?) ---
+Aparté desktop running at http://127.0.0.1:8765
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
+
+--- 2/5 MESURE : cinq doubles-appuis à ta vitesse naturelle ---
+
+  Fais CINQ doubles-appuis sur Ctrl+Option+D, à la vitesse où tu ferais un
+  double-clic de souris, en laissant ~3 secondes entre chaque paire.
+  N'essaie pas d'être rapide : je veux ta vitesse ordinaire.
+
+  Chaque appui affiche l'écart depuis le précédent. C'est ce chiffre qui
+  décidera de la valeur du filtre.
+
+registered ⌃⌥D (ctrl+opt+d) — press it; Ctrl-C to stop
+        (il reste 45 s)
+press #1 received
+press #2 received  (+0.800s since last)
+press #3 received  (+3.982s since last)
+press #4 received  (+0.712s since last)
+press #5 received  (+3.621s since last)
+press #6 received  (+0.720s since last)
+        (il reste 30 s)
+press #7 received  (+3.365s since last)
+press #8 received  (+0.512s since last)
+press #9 received  (+3.536s since last)
+press #10 received  (+0.712s since last)
+        (il reste 15 s)
+
+--- 3/5 checklist 6 : on demande une combinaison réservée (⌘Espace, Spotlight) ---
+Set the dictation shortcut to ⌘Space  (cmd+space).
+It takes effect when Aparté (re)starts, and works only while it runs.
+
+>>> REGARDE EN HAUT À DROITE DE TON ÉCRAN : une notification a-t-elle surgi ?
+
+serveur vivant : oui
+page d'accueil : HTTP 200
+hotkey-state   : {"registered": true, "configured_key": "cmd+space", "status": null, "error": null}
+--- ce que le serveur a écrit ---
+Aparté desktop running at http://127.0.0.1:8765
+
+--- 4/5 doctor pendant l'échec ---
+
+Transcription
+  ok      Local Whisper backend
+  ok      Speech model downloaded
+
+Microphone
+  ok      Microphone recorder
+  ok      Microphone permission
+
+Insertion
+  ok      Accessibility permission
+  ok      Clipboard copy
+
+System
+  ok      Desktop notifications
+  ok      Config file
+  ok      Dictation shortcut
+
+status  idle
+ready   yes
+hotkey  bind manually: /Users/marie-piergervais/aparte/.venv/bin/python -m aparte toggle --target paste
+
+--- 5/5 remise en état de la configuration ---
+Set the dictation shortcut to ⌃⌥D  (ctrl+opt+d).
+It takes effect when Aparté (re)starts, and works only while it runs.
+
+=== étape 8 terminée (le serveur tourne encore avec le raccourci refusé) ===
