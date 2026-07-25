@@ -166,7 +166,7 @@ class MacInstallHotkeyTest(unittest.TestCase):
     def _args(self, **over):
         base = dict(
             command="install-hotkey", key=None, target="paste",
-            name="Aparté dictation", print=False, remove=False,
+            name="Aparté dictation", print=False, remove=False, diagnostic=False,
         )
         base.update(over)
         return SimpleNamespace(**base)
@@ -227,6 +227,24 @@ class MacInstallHotkeyTest(unittest.TestCase):
             out = self._run(self._args(print=True), path)
             self.assertIn("⌃⌥D", out)                           # the default combo, pretty
             self.assertEqual(load_config(path)["hotkey"], "")   # print never persists
+
+    def test_the_diagnostic_dispatches_to_the_live_runner(self):
+        # --diagnostic registers the combo live (M8); with no configured combo it
+        # falls back to the default. The native runner is mocked (Linux dev host).
+        with tempfile.TemporaryDirectory() as d:
+            path = self._fresh_config(d)
+            with mock.patch("aparte.macos_runloop.run_hotkey_diagnostic") as run:
+                self._run(self._args(diagnostic=True), path)
+            run.assert_called_once_with("ctrl+opt+d")
+
+    def test_the_diagnostic_is_macos_only_on_linux(self):
+        with mock.patch.object(cli, "is_macos", return_value=False):
+            with mock.patch("aparte.macos_runloop.run_hotkey_diagnostic") as run:
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    cli.handle_install_hotkey(self._args(diagnostic=True))
+        self.assertIn("macOS-only", out.getvalue())
+        run.assert_not_called()
 
 
 class CliParserTest(unittest.TestCase):

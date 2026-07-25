@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import sys
 import threading
+import time
 
 from .macos_hotkey import (
     HotkeyDispatcher,
@@ -111,6 +112,61 @@ def _notify_register_failure(spec: str, exc: HotkeyError) -> None:
         )
     except Exception:
         pass
+
+
+def run_hotkey_diagnostic(
+    spec: str,
+    *,
+    register=register_hotkey,
+    run_loop=None,
+    clock=time.monotonic,
+    emit=print,
+) -> int:
+    """M8 native check: register ``spec`` live and log each RAW Carbon event.
+
+    This is the manual-smoke tool (``aparte install-hotkey --diagnostic``). It
+    deliberately bypasses :class:`HotkeyDispatcher` and wires ``on_trigger``
+    straight to the backend, so the count reflects **what the OS actually
+    delivers** — its whole purpose is to answer the question the Linux tests
+    can't: does one physical press yield exactly one ``kEventHotKeyPressed``, or
+    does macOS repeat/duplicate it? The inter-press delta printed alongside lets
+    you eyeball a double-tap against the 250 ms debounce window. It also prints
+    the real ``OSStatus`` — the other M8 unknown (is ⌃⌥D free on this machine).
+
+    ``register``/``run_loop`` are injected in tests; on a Mac the defaults drive
+    the real Carbon registration on a live AppKit loop. Returns the press count."""
+    if run_loop is None:
+        run_loop = _appkit_run_loop
+
+    seen = {"count": 0, "last": None}
+
+    def on_trigger() -> None:
+        seen["count"] += 1
+        now = clock()
+        gap = "" if seen["last"] is None else f"  (+{now - seen['last']:.3f}s since last)"
+        seen["last"] = now
+        emit(f"press #{seen['count']} received{gap}")
+
+    handle: object | None = None
+
+    def on_ready() -> None:
+        nonlocal handle
+        try:
+            handle = register(spec, on_trigger)
+        except HotkeyError as exc:
+            where = "" if exc.status is None else f" (OSStatus {exc.status})"
+            emit(f"registration refused{where}: {exc}")
+            return
+        emit(f"registered {safe_hotkey_label(spec)} ({spec}) — press it; Ctrl-C to stop")
+
+    try:
+        run_loop(on_ready)
+    except KeyboardInterrupt:
+        emit("\nstopping")
+    finally:
+        if handle is not None:
+            handle.unregister()
+    return seen["count"]
 
 
 def _appkit_run_loop(on_ready) -> None:

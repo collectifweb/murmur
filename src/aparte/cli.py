@@ -206,6 +206,11 @@ def build_parser() -> argparse.ArgumentParser:
     install_hotkey.add_argument("--name", default=DEFAULT_NAME, help="Display name for the shortcut.")
     install_hotkey.add_argument("--print", action="store_true", help="Show what would be bound without applying it.")
     install_hotkey.add_argument("--remove", action="store_true", help="Remove the Aparté shortcut.")
+    install_hotkey.add_argument(
+        "--diagnostic",
+        action="store_true",
+        help="(macOS) Register the shortcut live and log each event, to check it works (M8).",
+    )
 
     return parser
 
@@ -491,6 +496,10 @@ def handle_install_hotkey(args: argparse.Namespace) -> None:
     if is_macos():
         _install_hotkey_macos(args)
         return
+    if getattr(args, "diagnostic", False):
+        # Linux binds through gsettings; there is no live registration to observe.
+        print("The --diagnostic mode is macOS-only.")
+        return
     from .hotkey import command_string, current_binding, detect_desktop, key_label, manual_instructions, aparte_command
 
     command = command_string(aparte_command("toggle", "--target", args.target))
@@ -523,6 +532,10 @@ def _install_hotkey_macos(args: argparse.Namespace) -> None:
     """
     from .config import load_config, update_config
     from .macos_hotkey import DEFAULT_HOTKEY, HotkeyError, hotkey_label, normalize_hotkey
+
+    if args.diagnostic:
+        _run_hotkey_diagnostic_macos(args)
+        return
 
     if args.target != "paste":
         # The resident worker always delivers to paste (macos_recording); accepting
@@ -561,3 +574,23 @@ def _install_hotkey_macos(args: argparse.Namespace) -> None:
     update_config({"hotkey": canonical})
     print(f"Set the dictation shortcut to {hotkey_label(canonical)}  ({canonical}).")
     print("It takes effect when Aparté (re)starts, and works only while it runs.")
+
+
+def _run_hotkey_diagnostic_macos(args: argparse.Namespace) -> None:
+    """M8 native smoke: register the combo live and log each raw event.
+
+    Reads --key, else the configured combo, else the default. This registers the
+    real shortcut on its own AppKit loop, so it must not run while the resident
+    server already holds it — quit Aparté first, or pass a different --key."""
+    from .config import load_config
+    from .macos_hotkey import DEFAULT_HOTKEY, HotkeyError, normalize_hotkey
+    from .macos_runloop import run_hotkey_diagnostic
+
+    combo = args.key or str(load_config().get("hotkey", "") or "") or DEFAULT_HOTKEY
+    try:
+        canonical = normalize_hotkey(combo)
+    except HotkeyError as exc:
+        print(f"Invalid shortcut {combo!r}: {exc}")
+        print("Use the macOS format, e.g. 'ctrl+opt+d' or 'cmd+shift+space'.")
+        return
+    run_hotkey_diagnostic(canonical)

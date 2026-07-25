@@ -1151,6 +1151,15 @@ ré-enregistrement à chaud, surface d'état riche. M8 : validation native (coha
 run loop + hotkey, TCC, PortAudio), OSStatus réels, duplication d'événements,
 confirmation de la combinaison par défaut **⌃⌥D**.
 
+**M8 — outillage prêt (24/07), exécution en attente d'un Mac.** Checklist manuelle
+`docs/plan-portage-macos-m8.md` (7 étapes ordonnées, geste → attendu → signature
+d'échec → invariant, table des OSStatus) + outil `aparte install-hotkey --diagnostic`
+(`macos_runloop.run_hotkey_diagnostic`) : inscrit la combi en direct, hors serveur et
+**hors répartiteur** (événements bruts), imprime l'OSStatus et compte les événements
+par appui — répond aux deux mesures ouvertes (un appui = combien d'événements ?
+⌃⌥D libre ?). 4 tests mockés (`test_macos_runloop.py` +2, `test_cli.py` +2), suite
+verte (368). L'exécution native reste à faire par Alexandre sur son Mac.
+
 ### Windows, pour mémoire (étudié le 23/07, non planifié)
 
 Réécriture partielle, ~15–21 jours, ~le double de Mac. Aucun modèle Unix de

@@ -14,7 +14,7 @@ from unittest import mock
 
 from aparte import macos_runloop
 from aparte.macos_hotkey import HotkeyError, HotkeyState
-from aparte.macos_runloop import serve_macos
+from aparte.macos_runloop import run_hotkey_diagnostic, serve_macos
 
 
 class FakeServer:
@@ -169,6 +169,42 @@ class ServeMacosTest(unittest.TestCase):
         self.assertIn("taken", state.error)
         self.notify.assert_called_once()
         self.assertEqual(self.notify.call_args.kwargs.get("urgency"), "critical")
+
+
+class RunHotkeyDiagnosticTest(unittest.TestCase):
+    """The M8 native smoke tool: register live, count RAW events per press (it
+    bypasses the dispatcher on purpose), print the OSStatus. Native pieces injected."""
+
+    def test_it_counts_raw_events_and_unregisters(self):
+        lines, order = [], []
+        register = FakeRegister(handle=FakeHandle(order))
+
+        def run_loop(on_ready):
+            on_ready()                 # registers, capturing on_trigger
+            register.on_trigger()      # two OS-delivered presses
+            register.on_trigger()
+
+        count = run_hotkey_diagnostic(
+            "ctrl+opt+d", register=register, run_loop=run_loop,
+            clock=lambda: 0.0, emit=lines.append,
+        )
+        self.assertEqual(count, 2)
+        self.assertEqual(register.spec, "ctrl+opt+d")
+        self.assertIn("hotkey.unregister", order)          # teardown ran
+        self.assertTrue(any("press #2" in line for line in lines))
+
+    def test_a_refused_combo_reports_the_osstatus_and_counts_zero(self):
+        lines = []
+        register = FakeRegister(error=HotkeyError("taken", status=-9878))
+
+        def run_loop(on_ready):
+            on_ready()                 # registration fails; no events follow
+
+        count = run_hotkey_diagnostic(
+            "ctrl+opt+d", register=register, run_loop=run_loop, emit=lines.append,
+        )
+        self.assertEqual(count, 0)
+        self.assertTrue(any("OSStatus -9878" in line for line in lines))
 
 
 if __name__ == "__main__":
