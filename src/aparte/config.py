@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .platform_dispatch import is_macos
+
 
 APP_DIR_NAME = "aparte"
 CONFIG_FILE_NAME = "config.json"
@@ -14,6 +16,13 @@ CONFIG_FILE_NAME = "config.json"
 # config under the old directory and may still export the old variable names.
 LEGACY_APP_DIR_NAME = "murmur"
 LEGACY_ENV_PREFIX = "MURMUR_"
+
+
+# On macOS the tone is the only feedback there is: no tray icon yet (M6), and an
+# accessory app shows nothing on screen — a user who presses the shortcut has no
+# way to know the microphone opened (M8, observed). Linux has the panel icon, and
+# a tone on every dictation would just be noise there.
+_DEFAULT_BEEP = is_macos()
 
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -36,7 +45,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "paste_mode": "clipboard",
     "history_persist": False,
     "microphone": "",
-    "beep": False,
+    "beep": _DEFAULT_BEEP,
     "live_preview": True,
     "max_recording_seconds": 300,
     # macOS-only: the global shortcut combo, e.g. "ctrl+opt+d". Empty = no
@@ -77,7 +86,7 @@ class Settings:
     paste_mode: str = "clipboard"
     history_persist: bool = False
     microphone: str = ""
-    beep: bool = False
+    beep: bool = _DEFAULT_BEEP
     live_preview: bool = True
     max_recording_seconds: int = 300
     hotkey: str = ""
@@ -115,7 +124,7 @@ class Settings:
             paste_mode=get_env("PASTE_MODE") or str(config.get("paste_mode", "clipboard")),
             history_persist=bool(config.get("history_persist", False)),
             microphone=get_env("MICROPHONE") or str(config.get("microphone", "") or ""),
-            beep=bool(config.get("beep", False)),
+            beep=bool(config.get("beep", _DEFAULT_BEEP)),
             live_preview=bool(config.get("live_preview", True)),
             # Pas de « 0 = illimité » : `positive_int` rend 0 sur une valeur
             # illisible, et une faute de frappe rouvrirait le micro sans fin.

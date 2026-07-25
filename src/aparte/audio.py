@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
+import time
 import wave
 import math
 import shutil
@@ -69,6 +71,42 @@ def _list_microphones_sounddevice() -> list[dict[str, str]]:
         seen.add(name)
         microphones.append({"name": name, "label": name})
     return microphones
+
+
+# A capture goes to a temp file, gets transcribed, then deleted in a `finally`.
+# A process killed between the two leaves the user's voice on disk — seen in M8
+# after a Ctrl-C during a transcription. The name is the one tempfile builds:
+# eight random characters, which never matches the cached beep tones
+# (`aparte-<uid>-beep-start.wav`) — those are meant to stay.
+_ORPHAN_RECORDING = re.compile(r"^aparte-[a-z0-9_]{8}\.wav$")
+
+# Old enough that no live capture can be caught: the recording cap is 300 s by
+# default, and a second instance's file must never be pulled from under it.
+_ORPHAN_AFTER_SECONDS = 3600.0
+
+
+def sweep_orphan_recordings(older_than: float = _ORPHAN_AFTER_SECONDS) -> int:
+    """Delete captures an earlier run abandoned. Returns how many were removed.
+
+    Best-effort by design: this runs at startup, and a file that refuses to go
+    must never be the reason the app does not."""
+    now = time.time()
+    removed = 0
+    try:
+        entries = list(Path(tempfile.gettempdir()).iterdir())
+    except OSError:
+        return 0
+    for path in entries:
+        if not _ORPHAN_RECORDING.match(path.name):
+            continue
+        try:
+            if now - path.stat().st_mtime < older_than:
+                continue
+            path.unlink()
+            removed += 1
+        except OSError:
+            continue
+    return removed
 
 
 def ensure_microphone_access() -> None:

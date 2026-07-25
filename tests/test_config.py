@@ -1,9 +1,11 @@
+import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+from aparte import config
 from aparte.config import (
     Settings,
     load_config,
@@ -160,6 +162,25 @@ class LegacyConfigMigrationTest(unittest.TestCase):
                 clear=False,
             ):
                 self.assertEqual(Settings.from_env().model, "medium")
+
+
+class BeepDefaultTest(unittest.TestCase):
+    """The tone is the only feedback macOS has until the menu-bar icon exists
+    (M6): pressing the shortcut there shows nothing at all. Linux has the panel
+    icon, so a tone on every dictation would only be noise.
+    """
+
+    def test_the_default_follows_the_platform(self):
+        self.assertIs(config.DEFAULT_CONFIG["beep"], config.is_macos())
+
+    def test_a_choice_written_in_the_file_beats_the_platform_default(self):
+        # Someone who turned the tone off keeps it off, on either OS.
+        for chosen in (True, False):
+            with tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / "config.json"
+                path.write_text(json.dumps({"beep": chosen}), encoding="utf-8")
+                with mock.patch.dict(os.environ, {"APARTE_CONFIG": str(path)}):
+                    self.assertIs(config.Settings.from_env().beep, chosen)
 
 
 if __name__ == "__main__":

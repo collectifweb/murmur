@@ -1,4 +1,8 @@
+import os
+import shutil
 import subprocess
+import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -139,6 +143,49 @@ class MacBackendTest(unittest.TestCase):
                     audio.record_wav(2.0, device="USB Mic")
         sounddevice.assert_called_once_with(2.0, 16000, "USB Mic")
         arecord.assert_not_called()
+
+
+class SweepOrphanRecordingsTest(unittest.TestCase):
+    """A capture the app was killed before it could delete is the user's voice
+    left on disk (M8, Ctrl-C during a transcription). The sweep takes those, and
+    only those.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        patched = mock.patch("tempfile.gettempdir", return_value=self.tmp)
+        patched.start()
+        self.addCleanup(patched.stop)
+
+    def _file(self, name, age_seconds=0.0):
+        path = Path(self.tmp) / name
+        path.write_bytes(b"RIFF")
+        stamp = time.time() - age_seconds
+        os.utime(path, (stamp, stamp))
+        return path
+
+    def test_an_old_abandoned_capture_is_removed(self):
+        orphan = self._file("aparte-a1b2c3d4.wav", age_seconds=7200)
+        self.assertEqual(audio.sweep_orphan_recordings(), 1)
+        self.assertFalse(orphan.exists())
+
+    def test_a_recent_capture_is_left_alone(self):
+        # It could belong to an instance recording right now.
+        live = self._file("aparte-a1b2c3d4.wav", age_seconds=10)
+        self.assertEqual(audio.sweep_orphan_recordings(), 0)
+        self.assertTrue(live.exists())
+
+    def test_the_cached_beep_tones_survive(self):
+        # aparte-<uid>-beep-start.wav is built once on purpose and reused.
+        beep = self._file("aparte-501-beep-start.wav", age_seconds=99999)
+        audio.sweep_orphan_recordings()
+        self.assertTrue(beep.exists())
+
+    def test_someone_elses_temp_files_are_never_touched(self):
+        other = self._file("notes-a1b2c3d4.wav", age_seconds=99999)
+        audio.sweep_orphan_recordings()
+        self.assertTrue(other.exists())
 
 
 class EnsureMicrophoneAccessTest(unittest.TestCase):

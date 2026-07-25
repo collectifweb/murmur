@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
 
 from . import history
-from .audio import list_microphones
+from .audio import list_microphones, sweep_orphan_recordings
 from .clipboard import copy_text, paste_text
 from .config import Settings, get_env, load_config, positive_int, update_config
 from .diagnostics import collect_diagnostics
@@ -85,6 +85,10 @@ def run_desktop(host: str, port: int, settings: Settings, open_browser: bool = T
         if open_browser:
             webbrowser.open(running)
         return
+
+    # Past the hand-over above, this process is the one Aparté: a good moment to
+    # drop any capture an earlier run was killed before it could delete.
+    sweep_orphan_recordings()
 
     port = _available_port(host, port)
     handler, controller = handler_factory(settings, return_controller=True)
