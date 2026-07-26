@@ -1192,10 +1192,11 @@ enregistrement alors que le code était correct. **M6 devient prioritaire.**
 **Dette repérée** : `quickmachotkey` est dans l'extra `macos` et n'est jamais
 importé (le pont Carbon est en `ctypes`) — à retirer.
 
-### M7 — l'installation macOS (plan écrit le 25/07, **pas commencé**)
+### M7 — l'installation macOS (plan **validé `/confront-codex` le 25/07**, pas commencé)
 
-**Plan consolidé : `docs/plan-portage-macos-m7.md`.** Second avis de Codex archivé
-dans `docs/archives/avis-codex-m7-empaquetage-2026-07-25.md`.
+**Plan consolidé : `docs/plan-portage-macos-m7.md`.** Consensus bilatéral en 3 rounds,
+archives `docs/archives/confront-codex-portage-macos-m7-2026-07-25-2303/`. Second avis
+initial : `docs/archives/avis-codex-m7-empaquetage-2026-07-25.md`.
 
 **Contrainte de produit, pas de confort** (posée par Alexandre le 25/07) :
 **installer → ouvrir → accorder deux autorisations**. Rien d'autre. Ce que M8 a
@@ -1226,37 +1227,83 @@ aucun Mac pour fabriquer les versions, aucune intégration continue macOS.
 
 ```
 brew install collectifweb/aparte/aparte
-aparte install-app        → ~/Applications/Aparté.app
-(ouvrir)                  → « Aparté souhaite accéder au micro »
+aparte install-app --open → ~/Applications/Aparté.app, puis l'ouvre
+(deux autorisations)      → « Aparté souhaite accéder au micro »
                           → « Aparté souhaite contrôler cet ordinateur »
 ```
+
+**Deux commandes, puis deux autorisations** — pas « installer → ouvrir ». Le
+`post_install` d'une formula ne peut pas créer le bundle : les blocs d'installation
+sont sandboxés et `HOME` y est remplacé par un répertoire temporaire. On perd une
+étape par rapport à la promesse initiale, on gagne des autorisations qui disent
+enfin « Aparté ». Écrit tel quel dans la doc plutôt qu'arrondi.
 
 **Le modèle se télécharge au premier lancement**, pas embarqué (inchangé) : le paquet
 reste léger, et le travail de M7 est de rendre la progression **visible**, avec une
 phrase qui dit qu'Aparté ne dictera qu'à la fin.
 
-**L'invariant central du lot, et il n'est pas évident : le bundle doit être stable
-octet pour octet d'une version à l'autre.** Une signature ad-hoc n'a pas d'identité
-d'équipe — macOS reconnaît l'application par l'empreinte de son code. Si le bundle
-change, l'empreinte change, et **les autorisations sont oubliées**. Donc la version
-d'Aparté n'entre pas dans le bundle : le lanceur n'est pas Aparté, il a sa propre
-version, fixe.
+**Ce que la contre-expertise a changé** (3 rounds, consensus bilatéral).
+
+- **Le lanceur était un script shell — Apple dit explicitement de ne pas le faire.**
+  DTS, thread 678819 : *« TCC expects its bundled clients to use a native main
+  executable… If your product uses a script as its main executable, you're likely to
+  encounter TCC problems. »* C'était le mécanisme dont dépendait tout le bénéfice du
+  lot. Il devient un petit exécutable **Mach-O** en C, compilé chez l'utilisateur.
+- **Le lot de preuve passe en premier.** Il arrivait quatrième — le pari central se
+  serait vérifié après avoir écrit le bundle, l'icône, la commande et le check
+  `doctor`, exactement le défaut que M8 a puni.
+- **`codesign` devient un prérequis dur**, plus best-effort : un bundle mal signé
+  présenté comme installé est pire que pas d'installation.
+- **« Jamais mis en quarantaine » redevient une affirmation à vérifier** (`xattr -lr`
+  en validation native), pas un axiome.
+- **Le test de stabilité comparait les octets *avant* signature**, donc pas ce que
+  macOS regarde. La vraie mesure passe sur le Mac, après `codesign`.
+- **Le `cdhash` de référence sort du bundle** (`~/.config/aparte/`) : le ranger dedans
+  modifiait précisément ce qu'il prétendait stabiliser.
+- **`--force` prévient *avant* de remplacer**, `doctor` ne fait que constater après.
+
+**L'invariant central, et il n'est pas évident : le bundle ne change pas d'une version
+d'Aparté à l'autre.** Une signature ad-hoc n'a pas d'identité d'équipe — l'exigence
+TCC est attachée à l'empreinte du code (`cdhash`). Si le bundle change, macOS oublie
+les autorisations, **et la case reste cochée** dans les Réglages Système : la panne est
+silencieuse. Donc ni la version d'Aparté, ni le code Python, ni un chemin qui bouge
+n'entrent dans le bundle ; `brew upgrade` ne le touche pas.
+
+**Deux choix délibérément renvoyés à la mesure, pas à l'argument** — comme le nombre
+d'événements par appui et la fenêtre de 250 ms en M8 : `execve` contre processus
+enfant pour le lanceur, et ad-hoc contre certificat local auto-signé. M7-0 rend les
+deux réponses.
 
 **Découpage (chaque lot avec ses tests et son commit).**
 
-- [ ] **M7a** — le bundle, sans rien de natif : `macos_desktop.py`, `Info.plist`,
-      lanceur, réécriture `Cellar` → `opt`, test de stabilité octet pour octet.
+- [ ] **M7-0** — **porte de décision, sur un vrai Mac, avant tout le reste.** Bundle
+      sonde, lanceur Mach-O, **deux variantes** (`execve` / enfant surveillé), **les
+      deux autorisations** (micro AVFoundation + accessibilité
+      `AXIsProcessTrustedWithOptions`), **trois scénarios de signature** : A ad-hoc
+      rebuild identique, B ad-hoc rebuild différent à `CFBundleIdentifier` constant
+      (c'est B qui rend le résultat concluant), C certificat local. Isolation par
+      `tccutil reset`. Relevés : nom affiché, entrée Réglages Système, `cdhash`,
+      `codesign -d -r-`, `xattr -lr`. **Si aucune variante ne fait dire « Aparté »,
+      les lots suivants ne commencent pas.**
+- [ ] **M7a** — le lanceur : source C générée, options de compilation verrouillées
+      (pas de `__DATE__`, cible fixe), `Info.plist`, arborescence, réécriture
+      `Cellar` → `opt`, déterminisme de l'entrée.
 - [ ] **M7b** — `aparte.icns` généré depuis `logo.svg` et **commité**, régénération
       documentée dans `DESIGN.md`.
-- [ ] **M7c** — `aparte install-app`, `desktop_integration()` sur Darwin, signature
-      ad-hoc best-effort, check `doctor` `app_bundle`.
-- [ ] **M7d** — la formula, le dépôt personnel, `README` et doc du parcours Mac.
+- [ ] **M7c** — `install-app` (idempotent, `--open`, `--force` qui prévient),
+      `uninstall-app`, `desktop_integration()` sur Darwin, `codesign` **obligatoire**
+      (code de sortie non nul), checks `doctor`.
+- [ ] **M7d** — la formula : Python épinglé, `portaudio`/`libsndfile`, extras
+      `whisper,recording,macos` et **jamais `cuda`**, `brew test`, caveats, dépôt
+      personnel, `README` et doc du parcours Mac.
 - [ ] **M7e** — état `brew` dans `update.py`, libellés du menu et du panneau web.
-- [ ] **M7f** — modèle visible au premier lancement (déclenché par l'application,
-      observé en lecture seule — invariant Darwin).
-- [ ] **M7g** — démarrage à l'ouverture de session, LaunchAgent **via `open -a`**
-      (jamais le lanceur directement, sinon `launchd` redevient responsable).
-      Reportable.
+- [ ] **M7f** — modèle visible au premier lancement : `snapshot_download` déclenché
+      par l'application sur un fil, progression lue en sommant les `.incomplete` du
+      cache, état **indéterminé et honnête** si la taille est inconnue, observé en
+      lecture seule (invariant Darwin).
+- [ ] **M7g** — LaunchAgent **via `/usr/bin/open`** (jamais le lanceur directement,
+      sinon `launchd` redevient responsable), `RunAtLoad` seul, **pas de `KeepAlive`**,
+      chemins absolus, journaux dans `~/Library/Logs/Aparté/`. Reportable.
 - [ ] **M7h** — doc : `CLAUDE.md`, `CHANGELOG.md`, ce fichier, `README.md`.
 
 ### M6 — l'icône de barre de menus macOS (livrée et validée sur Mac le 25/07)

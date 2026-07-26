@@ -1,8 +1,9 @@
 # M7 — L'installation macOS
 
-_Plan écrit le 25/07/2026, après un second avis de Codex
-(`docs/archives/avis-codex-m7-empaquetage-2026-07-25.md`) et un fait nouveau qui a
-rouvert la décision de distribution._
+_Plan consolidé après contre-expertise (`/confront-codex`, 3 rounds, consensus bilatéral
+le 25/07/2026). Archives du débat :
+`docs/archives/confront-codex-portage-macos-m7-2026-07-25-2303/`. Second avis initial :
+`docs/archives/avis-codex-m7-empaquetage-2026-07-25.md`._
 
 ## Contexte
 
@@ -11,167 +12,225 @@ Ce qu'il a fallu faire pour qu'Aparté tourne sur un Mac pendant M8 : installer 
 `pip install --prefer-binary` avec les bons extras, attendre 500 Mo de modèle — tout en
 ligne de commande. C'est le contraire de la promesse.
 
-**La cible : installer → ouvrir → accorder deux autorisations. Rien d'autre.**
-
-Et un défaut de fond, trouvé pendant M8 : les autorisations macOS sont aujourd'hui
-accordées à **Terminal**, pas à Aparté. La fenêtre dit « Terminal souhaite accéder au
-micro ». L'utilisateur autorise son terminal à écouter, ce qui n'est ni ce qu'il veut
-ni ce qu'on lui demande vraiment.
+Et un défaut de fond, trouvé pendant M8 : les autorisations macOS sont accordées à
+**Terminal**, pas à Aparté. La fenêtre dit « Terminal souhaite accéder au micro ».
+L'utilisateur autorise son terminal à écouter, ce qui n'est ni ce qu'il veut ni ce qu'on
+lui demande vraiment.
 
 ## Le fait nouveau
 
-La décision du 25/07 était : **cask Homebrew, sans compte développeur Apple**, en
-s'appuyant sur le fait que Homebrew retire lui-même l'attribut de quarantaine, donc que
-Gatekeeper ne bloque pas.
+La décision initiale était : **cask Homebrew, sans compte développeur Apple**, en
+s'appuyant sur le fait que Homebrew retire lui-même l'attribut de quarantaine.
 
 **Ce n'est plus vrai.**
 
 - Homebrew a **supprimé `--no-quarantine`** (version 5.1, mars 2026). Un cask pose
   désormais la quarantaine, sans option pour la refuser.
 - Homebrew **retire tous les casks qui échouent au contrôle Gatekeeper le
-  1er septembre 2026** — dans cinq semaines. Leur audit exige signature **et**
-  notarisation.
-- Depuis macOS Sequoia, le clic droit → Ouvrir ne suffit plus à passer outre : il faut
-  aller dans Réglages Système → Confidentialité et sécurité → Ouvrir quand même.
+  1er septembre 2026**. Leur audit exige signature **et** notarisation.
+- Depuis macOS Sequoia, le clic droit → Ouvrir ne suffit plus : il faut passer par
+  Réglages Système → Confidentialité et sécurité → Ouvrir quand même.
 
-Un cask non signé n'entre donc plus dans le dépôt officiel, et dans un dépôt personnel
-il installe une application mise en quarantaine, que macOS refuse d'ouvrir en annonçant
-qu'elle est endommagée. La promesse de simplicité tombe exactement là où elle devait
-tenir.
+Un cask non signé n'entre plus dans le dépôt officiel, et dans un dépôt personnel il
+installe une application que macOS refuse d'ouvrir en annonçant qu'elle est endommagée.
 
 **Les formulas ne sont pas concernées.** La restriction ne vise que les casks.
 
 Sources : [Homebrew/brew#20755](https://github.com/Homebrew/brew/issues/20755),
-[Homebrew discussion #6537](https://github.com/orgs/Homebrew/discussions/6537),
-[Homebrew 5.0.0](https://workbrew.com/blog/homebrew-5-0-0).
+[discussion #6537](https://github.com/orgs/Homebrew/discussions/6537),
+[Homebrew 5.0.0](https://brew.sh/2025/11/12/homebrew-5.0.0/).
 
-Le second avis de Codex recommandait `.app` + cask. Il a été rendu **sans ce fait** —
-il traitait le retrait de la quarantaine comme « une bonne hypothèse pratique à
-tester ». Le reste de son avis tient et est repris ci-dessous : le bundle vaut son coût
-pour les autorisations (§ 1), et `update.py` ne doit plus proposer sa mise à jour
-in-process sur une installation Homebrew (§ 5).
+## La décision
 
-## La décision : une formula, et une `.app` construite sur la machine de l'utilisateur
+**Une formula Homebrew dans un dépôt personnel, et une `.app` construite sur la machine
+de l'utilisateur.**
 
 Trois faits la portent.
 
-1. **Une formula n'est pas un cask.** Rien de ce qui précède ne s'y applique : pas
-   d'audit Gatekeeper, pas de notarisation, pas de date butoir.
-2. **La quarantaine est posée par ce qui télécharge.** Un dossier assemblé sur place par
-   un processus local ne la reçoit jamais. Si la `.app` est **construite** chez
-   l'utilisateur au lieu d'être téléchargée, Gatekeeper n'a rien à examiner — il n'y a
-   pas de « première ouverture d'une application venue d'internet ».
-3. **Les autorisations suivent l'application qui lance.** macOS attribue une demande TCC
-   au processus « responsable », c'est-à-dire au bundle que LaunchServices a démarré.
-   C'est précisément pour ça qu'aujourd'hui c'est Terminal : c'est Terminal qui lance
-   Python. Une `.app` qui lance Python devient responsable à sa place, et les deux
-   fenêtres disent « Aparté ».
+1. **Une formula n'est pas un cask** : pas d'audit Gatekeeper, pas de notarisation, pas
+   de date butoir.
+2. **La quarantaine est posée par ce qui télécharge.** Une application construite
+   localement par la commande d'installation ne devrait pas la recevoir dans le flux
+   Homebrew normal — affirmation **à vérifier** en M7-0 par `xattr -lr`, pas un axiome.
+3. **Les autorisations TCC suivent l'application responsable**, celle que LaunchServices
+   a démarrée. C'est pour ça qu'aujourd'hui c'est Terminal : c'est lui qui lance Python.
 
-Le parcours devient :
+Le parcours réel, écrit sans l'arrondir :
 
 ```
-brew install collectifweb/aparte/aparte     ← pose le venv, comme n'importe quelle formula
-aparte install-app                          ← fabrique ~/Applications/Aparté.app
-(ouvrir Aparté)                             ← « Aparté souhaite accéder au micro »
-                                              « Aparté souhaite contrôler cet ordinateur »
+brew install collectifweb/aparte/aparte
+aparte install-app --open
+(deux autorisations, au nom d'Aparté)
 ```
+
+**Deux commandes, puis deux autorisations** — pas « installer → ouvrir ». Le cask aurait
+donné une commande ; il est mort. `install-app --open` ouvre l'application à la fin, donc
+la seconde commande *est* l'étape « ouvrir ». On perd une étape par rapport à la promesse
+initiale, on gagne des autorisations qui disent enfin « Aparté ». C'est le meilleur
+échange disponible, et il se dit tel quel dans la documentation.
 
 Aucun compte Apple. Aucun Mac pour fabriquer les versions — la construction se fait chez
-l'utilisateur, comme toute formula. Aucune intégration continue macOS. Et rien de tout
-ça ne meurt le 1er septembre.
+l'utilisateur, comme toute formula. Aucune intégration continue macOS.
 
 **Ce que ça ne donne pas, et qu'il faut dire :** une signature ad-hoc n'est pas une
 signature Apple. Aparté reste une application non notarisée, distribuée hors de l'App
-Store, par un dépôt Homebrew personnel. C'est honnête, ce n'est pas équivalent.
+Store, par un dépôt Homebrew personnel.
+
+## M7-0 — la porte de décision
+
+**Aucun autre lot ne commence avant sa réponse.** Le pari central du lot — « Aparté
+devient le responsable TCC » — ne se vérifie que sur un vrai Mac, et M8 a montré ce que
+coûte une hypothèse non observée (un `Segmentation fault` à la première exécution
+native, invisible en test mocké). Si aucune variante ne donne les deux autorisations au
+nom d'Aparté avec une conservation acceptable, **on ne construit pas derrière** : on
+repense la distribution.
+
+**Deux variantes de lanceur**, parce que la question ne se tranche pas par raisonnement :
+
+| Variante | Le lanceur… | Pari |
+|---|---|---|
+| `execve` | remplace son image par Python | un seul processus, mais l'exécutable principal du bundle n'existe plus |
+| enfant surveillé | lance Python et l'attend | le processus dont l'exécutable est *dans* le bundle reste vivant — cas non ambigu |
+
+**Les deux autorisations**, pour chaque variante : micro par AVFoundation **et**
+accessibilité par `AXIsProcessTrustedWithOptions`. La promesse produit en compte deux ;
+n'en mesurer qu'une laisserait la moitié non vérifiée.
+
+**Trois scénarios de signature**, parce que sans le B on ne saurait pas si le A a tenu
+grâce au `cdhash` identique ou parce que TCC s'en moquait :
+
+| # | Scénario | Attendu |
+|---|---|---|
+| A | ad-hoc, rebuild réellement identique | même `cdhash`, autorisations conservées |
+| B | ad-hoc, rebuild volontairement différent, `CFBundleIdentifier` constant | `cdhash` différent, **autorisations perdues** |
+| C | certificat local auto-signé, rebuild différent | exigence liée au certificat, autorisations conservées |
+
+**Relevés, pour chaque combinaison** : le nom affiché dans la fenêtre, l'entrée et
+l'icône dans Réglages Système, `codesign --verify --strict`, `codesign -d -r-`, le
+`cdhash`, le mode de lancement (Finder ou `open`), et `xattr -lr` sur le bundle neuf.
+
+**Isolation** : `tccutil reset Microphone` et `tccutil reset Accessibility` entre
+scénarios, ou compte utilisateur neuf — sinon les résultats se contaminent. M8 a déjà
+procédé ainsi pour prouver la demande de micro ; le montage se reprend tel quel.
+
+**Ce que M7-0 décide :** la variante de lanceur, et ad-hoc contre certificat local. Si B
+ne perd pas les autorisations, l'invariant « bundle stable » est inutilement contraignant
+et on le relâche. Si C est nécessaire, le certificat local est adopté et l'invariant
+disparaît avec lui.
 
 ## Approche
 
 ### 1. `macos_desktop.py` — la couture que M0 avait posée et qui n'a jamais servi
 
-`platform_dispatch.desktop_integration()` lève `UnsupportedPlatformError` sur tout ce
-qui n'est pas Linux. M7 lui donne sa seconde branche : sur Darwin, elle rend
-`macos_desktop`.
+`platform_dispatch.desktop_integration()` lève `UnsupportedPlatformError` sur tout ce qui
+n'est pas Linux. M7 lui donne sa seconde branche : sur Darwin, elle rend `macos_desktop`.
 
 Le module reprend l'API de `linux_desktop` — `install_desktop_entry()`,
-`install_autostart_entry()`, `remove_legacy_entries()` — pour que `cli.py` change le
-moins possible. Ce que ces noms recouvrent diffère (un bundle au lieu d'un fichier
-`.desktop`, un LaunchAgent au lieu d'une entrée `~/.config/autostart`), la forme non.
+`install_autostart_entry()`, `remove_legacy_entries()` — pour que `cli.py` change le moins
+possible. Ce que ces noms recouvrent diffère (un bundle au lieu d'un fichier `.desktop`,
+un LaunchAgent au lieu d'une entrée `~/.config/autostart`), la forme non.
 
-**Le comportement Linux ne bouge pas d'un octet.** La branche `is_linux()` de
-`desktop_integration()` est inchangée ; la nouvelle branche est ajoutée avant le `raise`.
+**Le comportement Linux ne bouge pas d'un octet.** La branche `is_linux()` est inchangée ;
+la nouvelle est ajoutée avant le `raise`.
 
-### 2. Le bundle : mince, et surtout **stable octet pour octet**
+### 2. Le bundle : exécutable principal **Mach-O**, jamais un script
 
-C'est l'invariant central du lot, et il n'est pas évident.
+Apple DTS, [thread 678819](https://developer.apple.com/forums/thread/678819), mot pour
+mot :
 
-Une signature ad-hoc n'a pas d'identité d'équipe : macOS identifie l'application par
-l'empreinte de son code (`cdhash`). **Si le bundle change, l'empreinte change, et macOS
-oublie les autorisations accordées** — micro et accessibilité redemandés à chaque mise à
-jour d'Aparté. Ce serait pire que l'état actuel : aujourd'hui l'utilisateur autorise
-Terminal une fois, demain il réautoriserait Aparté à chaque version.
+> *TCC expects its bundled clients — apps, app extensions, and so on — to use a native
+> main executable. That is, it expects the `CFBundleExecutable` property to be the name
+> of a Mach-O executable. If your product uses a script as its main executable, you're
+> likely to encounter TCC problems.*
 
-**Donc le bundle ne contient rien qui change d'une version à l'autre.** La version
-d'Aparté n'y figure pas. Le bundle n'est pas Aparté : c'est son lanceur, et le lanceur
-a sa propre version, fixe.
+Donc `Contents/MacOS/aparte` est un petit exécutable écrit en C (≈ 60 lignes), **compilé
+sur la machine de l'utilisateur** par la formula avec le `clang` des outils en ligne de
+commande — que Homebrew exige déjà.
 
 ```
 ~/Applications/Aparté.app/
   Contents/
     Info.plist            ← identité stable, aucune version d'Aparté
-    MacOS/aparte          ← le lanceur, quelques lignes de shell
+    MacOS/aparte          ← exécutable Mach-O compilé localement
     Resources/aparte.icns ← l'icône, commitée
 ```
+
+Ce que fait le lanceur : résoudre le chemin stable de l'interpréteur, vérifier qu'il
+existe, **afficher une fenêtre d'erreur nommant la commande à retaper** s'il a disparu,
+puis lancer Python. Une `.app` lancée depuis le Finder qui meurt ne laisse aucune trace
+visible — pas de terminal, pas de message. C'est le pire mode de panne du lot.
 
 `Info.plist`, les clés qui comptent :
 
 | Clé | Valeur | Pourquoi |
 |---|---|---|
-| `CFBundleIdentifier` | `ca.collectifweb.aparte` | l'identité que voient TCC et les Réglages Système. **Ne jamais la changer** : ce serait une nouvelle application, sans ses autorisations. |
+| `CFBundleIdentifier` | `ca.collectifweb.aparte` | l'identité que voient TCC et les Réglages Système. **Définitive** : la changer après diffusion créerait une seconde application, et l'utilisateur devrait tout réautoriser sans comprendre. |
 | `CFBundleName` / `CFBundleDisplayName` | `Aparté` | le nom dans la fenêtre d'autorisation |
 | `LSUIElement` | `true` | pas d'icône du Dock, pas de fenêtre — Aparté vit dans la barre de menus (M6) |
 | `NSMicrophoneUsageDescription` | la phrase montrée dans la fenêtre | obligatoire, sinon macOS tue le processus au lieu de demander |
-| `CFBundleShortVersionString` | version **du lanceur**, fixe | pas celle d'Aparté : la faire varier casserait l'empreinte |
+| `CFBundleShortVersionString` | version **du lanceur**, fixe | pas celle d'Aparté (voir § 3) |
 
-**Le chemin de l'interpréteur.** Le lanceur doit désigner le Python du venv Homebrew.
-`sys.executable` donne au moment de l'installation un chemin qui contient le numéro de
-version (`…/Cellar/aparte/1.1.1/libexec/bin/python3`) — il disparaît au premier
-`brew upgrade`. Homebrew maintient à côté un chemin stable (`…/opt/aparte/…`) : le
-lanceur écrit **celui-là**. La réécriture est une transformation de chaîne, donc prouvée
-sous Linux par des tests, sans Mac.
+**Le chemin de l'interpréteur.** `sys.executable` donne à l'installation un chemin
+contenant le numéro de version (`…/Cellar/aparte/1.1.1/libexec/bin/python3`) — il
+disparaît au premier `brew upgrade`. Homebrew maintient à côté un chemin stable
+(`…/opt/aparte/…`) : le lanceur écrit **celui-là**. La réécriture est une transformation
+de chaîne, donc prouvée sous Linux, sans Mac.
 
-**Le test qui garde l'invariant** : construire le bundle deux fois avec deux
-`__version__` différents et vérifier que les fichiers produits sont identiques.
+### 3. Pourquoi le bundle ne doit pas changer d'une version à l'autre
 
-### 3. La signature ad-hoc
+Apple, même source :
 
-`codesign --force --sign - --identifier ca.collectifweb.aparte <bundle>`. Gratuite,
-fournie par les outils en ligne de commande que Homebrew exige déjà.
+> *If your code is unsigned, or signed ad hoc, the system can't tell that version N+1 of
+> your code is the same as version N, and thus you'll encounter excessive prompts.*
 
-Elle est **best-effort** : si `codesign` manque ou refuse, on le dit clairement et on
-garde le bundle — sur Intel il fonctionne sans. Ce qu'elle apporte, c'est une identité
-que macOS accepte partout, y compris sur Apple Silicon ; ce qu'elle n'apporte pas, c'est
-la moindre garantie Apple.
+Une signature ad-hoc n'a pas d'identité d'équipe : l'exigence enregistrée par TCC est
+attachée à l'empreinte du code (`cdhash`). Si le bundle change, macOS **oublie les
+autorisations** — et la case reste cochée dans les Réglages Système, ce qui rend la panne
+silencieuse.
 
-### 4. Un lanceur qui échoue doit parler
+L'avertissement porte sur un code **qui change**. Le nôtre ne change pas dans le parcours
+normal : le bundle ne contient ni la version d'Aparté, ni le code Python, ni un chemin
+qui bouge. `brew upgrade` remplace le contenu du préfixe et **ne touche pas au bundle**.
+Il n'y a pas de « version N+1 du lanceur ».
 
-Une `.app` lancée depuis le Finder qui meurt ne laisse **aucune trace visible** : pas de
-terminal, pas de message, rien. C'est le pire mode de panne possible pour ce lot.
+Là où le risque mord vraiment, c'est **la réinstallation**. Trois mesures :
 
-Le lanceur vérifie donc que l'interpréteur existe avant de l'exécuter, et s'il a disparu
-(désinstallation, `brew uninstall`, dossier déplacé) affiche une fenêtre par `osascript`
-qui nomme la commande à retaper. Trois lignes de shell, et la différence entre « ça ne
-marche pas » et « voilà quoi faire ».
+1. **`install-app` est idempotent** : si le bundle en place est déjà celui qu'on
+   produirait, il ne réécrit rien, ne recompile rien, ne re-signe rien.
+2. **La compilation verrouille ses entrées** : pas de `__DATE__` ni `__TIME__`, pas
+   d'infos de débogage portant des chemins temporaires, options fixes, cible de
+   déploiement fixe. L'UUID du lieur est dérivé du contenu par défaut
+   ([TN3178](https://developer.apple.com/documentation/technotes/tn3178-checking-for-and-resolving-build-uuid-problems)),
+   donc le déterminisme est plausible — sans être garanti à travers une mise à jour des
+   outils en ligne de commande.
+3. **`--force` prévient avant de casser, pas après** : il compare le `cdhash` du bundle
+   en place à celui qu'il produirait et, s'ils diffèrent, demande une confirmation
+   explicite disant que les autorisations devront être redonnées. **Le `cdhash` de
+   référence se range hors du bundle** (`~/.config/aparte/`) — le ranger dedans
+   modifierait précisément ce qu'on prétend stabiliser.
+
+`doctor` garde son rôle, mais pour ce qu'il sait faire : constater après coup qu'un
+bundle a changé et le dire en clair.
+
+**Le certificat local auto-signé est conçu, pas adopté.** Il ancre l'exigence sur le
+certificat au lieu du `cdhash`, donc survit aux rebuilds ; il coûte une identité dans le
+trousseau et une surface de support. Le scénario C de M7-0 décide.
+
+### 4. `codesign` est un prérequis dur
+
+Pas best-effort. Une installation qui rend un bundle mal signé en annonçant le succès est
+pire que pas d'installation, et sur Apple Silicon le code natif exige une signature, même
+ad-hoc. Si `codesign` manque ou refuse : message clair, **code de sortie non nul**, pas de
+bundle « presque bon ».
 
 ### 5. `update.py` apprend l'installation Homebrew
 
 Aujourd'hui `find_repo()` ne trouve pas de `.git` sur une installation Homebrew, l'état
-retombe sur `manual`, et l'article du menu annonce « Aparté ne tourne pas depuis un
-dépôt git ». Pour quelqu'un qui a installé exactement comme on le lui a dit, c'est une
-réponse absurde.
+retombe sur `manual`, et le menu annonce « Aparté ne tourne pas depuis un dépôt git ».
+Pour quelqu'un qui a installé exactement comme on le lui a dit, c'est une réponse absurde.
 
-Nouvel état `brew`, avec la commande à lancer. La détection lit le préfixe
-d'installation — encore une transformation de chaîne, testable ici. Les trois mondes
-restent distincts :
+Nouvel état `brew`, avec la commande à lancer. La détection lit le préfixe d'installation
+— transformation de chaîne, testable ici.
 
 | Installation | État | Ce que dit le menu |
 |---|---|---|
@@ -179,123 +238,128 @@ restent distincts :
 | clone git sur Mac (testeur) | inchangé | inchangé |
 | Homebrew | `brew` | `brew upgrade collectifweb/aparte/aparte` |
 
-**Rien du chemin Linux ne change.** L'état `brew` est ajouté à côté de `manual`, il ne
-le remplace pas.
+**Rien du chemin Linux ne change.** L'état `brew` est ajouté à côté de `manual`, il ne le
+remplace pas. `/api/update/apply` reste 404 sur Darwin (invariant M3).
 
 ### 6. Le modèle au premier lancement
 
 Le modèle (~500 Mo) se télécharge à la première transcription — c'est déjà le
-comportement. Le travail de M7 est de le **rendre visible**, pas de le changer.
+comportement. Le travail de M7 est de le **rendre visible**.
 
-Une installation neuve ouvre l'interface, et l'interface dit, en français et en anglais :
-le modèle se télécharge, voici où ça en est, **Aparté ne dictera qu'à la fin**. Sans ça,
-la première dictée d'un Mac neuf ressemble à une application qui ne répond pas.
-
-**Le téléchargement n'est déclenché par aucune route HTTP** — invariant Darwin. C'est
-l'application qui le lance, sur un fil ; l'interface ne fait que **l'observer**, par une
-route en lecture seule, comme `/api/recording-state` et `/api/tray-state`.
+- Aparté appelle `snapshot_download` **lui-même**, sur un fil, au premier lancement quand
+  le modèle manque : c'est l'application qui déclenche, **jamais une route HTTP**
+  (invariant Darwin). L'interface ne fait qu'observer, par une route en lecture seule,
+  comme `/api/recording-state` et `/api/tray-state`.
+- La progression se lit en **sommant les fichiers `.incomplete` du cache** face à la
+  taille attendue : ce que le disque montre réellement, sans dépendre d'un rappel de
+  progression que la bibliothèque ne garantit pas.
+- Si `huggingface_hub` n'est pas importable ou la taille inconnue : état **indéterminé et
+  honnête**, sans pourcentage inventé.
+- Échec réseau, proxy, somme de contrôle : un état d'erreur nommé.
+- La phrase dit clairement qu'**Aparté ne dictera qu'à la fin**.
+- `doctor` garde `model_ready` comme source de vérité persistante.
 
 ### 7. Le démarrage à l'ouverture de session
 
-Sur Mac, le raccourci exige que l'application tourne : sans démarrage automatique,
-l'utilisateur doit ouvrir Aparté à chaque session avant de pouvoir dicter.
+Sur Mac, le raccourci exige que l'application tourne. Un LaunchAgent, avec **un détail
+qui décide de tout** : il lance `/usr/bin/open`, **jamais le lanceur directement**.
+Exécuter le lanceur ferait de `launchd` le processus responsable, et on reperdrait
+exactement l'attribution qu'on vient de gagner.
 
-Un LaunchAgent, avec **un détail qui décide de tout** : il lance
-`/usr/bin/open -a ~/Applications/Aparté.app`, **jamais le lanceur directement**. Lancer
-le lanceur ferait de `launchd` le processus responsable, et on reperdrait exactement
-l'attribution qu'on vient de gagner. Passer par `open`, c'est demander à LaunchServices
-de démarrer l'application, donc c'est l'application qui reste responsable.
+- `RunAtLoad` seul, **pas de `KeepAlive`** : le job sort tout de suite, il serait relancé
+  en boucle ;
+- **chemins absolus**, jamais de `~` — `launchd` ne fait pas d'expansion shell ;
+- journaux vers `~/Library/Logs/Aparté/`, sinon un échec au login est indiagnosticable ;
+- `open -b ca.collectifweb.aparte` contre chemin absolu : **tranché nativement** ;
+- plist historique assumé **comme choix de compatibilité** avec Big Sur (validé en M8),
+  pas comme le mécanisme Apple courant — `SMAppService` demande macOS 13.
 
-C'est le lot le moins prouvable ici et le plus dépendant du Mac : il est découpé en
-dernier, et il peut être reporté sans rien casser du reste.
+Lot le moins prouvable ici, découpé en dernier, **reportable sans rien casser**.
 
 ### 8. La formula et le dépôt
 
-Un **dépôt personnel** (`collectifweb/homebrew-aparte`), pas le dépôt officiel : celui-ci
-demande une notoriété (75 étoiles, 30 forks…) qu'Aparté n'a pas, et l'y présenter
-maintenant serait refusé.
+Un **dépôt personnel** (`collectifweb/homebrew-aparte`) : le dépôt officiel demande une
+notoriété (75 étoiles, 30 forks…) qu'Aparté n'a pas.
 
-La formula déclare Python, installe Aparté dans un venv avec les extras `whisper`,
-`recording` et `macos`, expose la commande `aparte`, et sa note d'installation dit la
-suite en deux lignes : `aparte install-app`, puis ouvrir Aparté.
+- **Python épinglé** : `depends_on "python@3.12"`, confirmé ou corrigé en M7-0 selon les
+  roues réellement disponibles sur la machine de test.
+- **Dépendances natives** déclarées : `portaudio` (pour `sounddevice`), `libsndfile`
+  (pour `soundfile`) — plutôt que de parier sur les roues.
+- **Extras** : `whisper`, `recording`, `macos`. **Jamais `cuda`** — il n'existe pas sur
+  Mac et tirerait des paquets NVIDIA inutiles.
+- **`brew test`** : `aparte --version`, l'import de `rumps`, `AppKit`, `sounddevice`, et
+  la génération du bundle dans un répertoire temporaire (ce qui teste la compilation du
+  lanceur sans toucher à `~/Applications`).
+- **Caveats** : `aparte install-app --open`, `aparte install-hotkey`, le téléchargement du
+  modèle au premier lancement, et `aparte uninstall-app` **avant** `brew uninstall`.
 
-La commande complète pour l'utilisateur reste **une seule ligne** :
-`brew install collectifweb/aparte/aparte`.
+**Le `post_install` ne peut pas créer le bundle** : les blocs d'installation d'une formula
+sont sandboxés et `HOME` y est remplacé par un répertoire temporaire. C'est pourquoi le
+parcours garde sa commande intermédiaire.
+
+**Ce que Homebrew ne possède pas** : la `.app` vit dans `~/Applications`, hors du préfixe,
+donc `brew uninstall` la laissera en place. D'où `aparte uninstall-app` et sa mention dans
+les caveats. Le compromis est nommé, pas caché.
 
 ## Étapes d'implémentation
 
 Chaque lot a ses tests et son commit.
 
-1. **M7a — le bundle, sans rien de natif.** `macos_desktop.py` : `build_info_plist()`,
-   `build_launcher()`, la réécriture `Cellar` → `opt`, `install_desktop_entry()` qui
-   écrit l'arborescence. Tests : contenu du plist, lanceur qui nomme le bon interpréteur,
-   **stabilité octet pour octet entre deux versions**, dossier créé s'il manque.
-2. **M7b — l'icône.** `aparte.icns` généré depuis `logo.svg` et **commité** (aucune
-   étape de compilation pour un contributeur, comme les PNG de M6c), commande de
-   régénération documentée dans `DESIGN.md`. Test : en-tête `icns` valide, tailles
-   attendues présentes.
-3. **M7c — la commande et la couture.** `aparte install-app` (`--force`, `--print`),
-   `desktop_integration()` qui rend `macos_desktop` sur Darwin, signature ad-hoc
-   best-effort, check `doctor` `app_bundle` (`detail` dynamique, **sans clé i18n**,
-   jamais essentiel — règle `CLAUDE.md` § Interface).
-4. **M7d — la formula.** `packaging/homebrew/aparte.rb`, le dépôt personnel, la note
-   d'installation, le `README` et `docs/` réécrits pour le parcours Mac réel.
-5. **M7e — la mise à jour Homebrew.** État `brew` dans `update.py`, détection par
-   préfixe, libellés du menu de barre de menus (fr + en), phrase du panneau web.
-6. **M7f — le modèle visible au premier lancement.** Téléchargement lancé par
-   l'application sur un fil, route d'observation en lecture seule, écran d'accueil
-   fr + en via `i18n.js`, passage par `/impeccable`.
-7. **M7g — le démarrage à l'ouverture de session.** LaunchAgent via `open -a`,
-   `aparte install-autostart` sur Mac, `remove_legacy_entries()`. Reportable.
-8. **M7h — doc.** `CLAUDE.md` (les invariants ci-dessous), `CHANGELOG.md`,
-   `tasks/todo.md`, `README.md`.
+| Lot | Contenu | Prouvable sous Linux ? |
+|---|---|---|
+| **M7-0** | **Preuve TCC native.** Bundle sonde, lanceur Mach-O, deux variantes, deux autorisations, trois scénarios de signature, `xattr`, `cdhash`. **Porte de décision.** | non, c'est tout son objet |
+| M7a | Le lanceur : source C générée, options de compilation, `Info.plist`, arborescence, réécriture `Cellar` → `opt`, déterminisme de l'entrée | oui |
+| M7b | `aparte.icns` généré depuis `logo.svg` et **commité** (aucune étape de compilation pour un contributeur, comme les PNG de M6c), régénération documentée dans `DESIGN.md` | oui |
+| M7c | `install-app` (idempotent, `--open`, `--force` qui prévient), `uninstall-app`, `desktop_integration()` sur Darwin, `codesign` **obligatoire**, checks `doctor` | oui |
+| M7d | La formula, le dépôt personnel, `brew test`, caveats, `README` et doc du parcours Mac | partiellement |
+| M7e | État `brew` dans `update.py`, libellés du menu (fr + en) et du panneau web | oui |
+| M7f | Modèle visible au premier lancement, mécanisme du § 6, passage par `/impeccable` | oui |
+| M7g | LaunchAgent. **Reportable** | oui, sauf le cycle `launchd` |
+| M7h | Doc : `CLAUDE.md`, `CHANGELOG.md`, `tasks/todo.md`, `README.md` | — |
 
 ## Points de vigilance
 
 - **Les faux Linux prouvent notre orchestration, jamais le comportement de la
-  plateforme.** M8 l'a payé cash : un `Segmentation fault` à la première exécution
-  native, invisible en test mocké. Ici, tout ce qui touche à `codesign`, à
-  LaunchServices et à l'attribution TCC ne se vérifie que sur le Mac.
-- **L'attribution TCC à travers une mise à jour est le vrai risque du lot.** La
-  stabilité octet pour octet du bundle est une déduction, pas une observation : elle se
-  vérifie en accordant les autorisations, en faisant un `brew upgrade`, et en regardant
-  si elles sont toujours là.
-- **`CFBundleIdentifier` est définitif.** Le changer après une première diffusion créerait
-  une seconde application aux yeux de macOS, et l'utilisateur devrait tout réautoriser
-  sans comprendre pourquoi.
-- **La `.app` doit rester hors du venv.** Elle vit dans `~/Applications`, pas dans le
-  préfixe Homebrew : un `brew uninstall` ne doit pas laisser une application fantôme,
-  mais un `brew upgrade` ne doit pas l'effacer non plus.
-- **Ne pas promettre que la signature ad-hoc vaut une signature Apple.** Elle ne la vaut
-  pas, et c'est ce qu'on écrit.
-- **`rumps.notification()` exige toujours un vrai bundle.** Avec M7 il en existe un —
-  mais on ne bascule pas dessus dans ce lot : `notify()` par `osascript` fonctionne, et
-  changer ça ici mélangerait deux sujets.
+  plateforme.** Tout ce qui touche à `codesign`, à LaunchServices et à l'attribution TCC
+  ne se vérifie que sur le Mac.
+- **M7-0 est une porte, pas une formalité.** Si elle ne s'ouvre pas, les lots suivants ne
+  commencent pas.
+- **`CFBundleIdentifier` est définitif.**
+- **Le `cdhash` de référence vit hors du bundle.**
+- **Ne pas promettre que la signature ad-hoc vaut une signature Apple.**
+- **`rumps.notification()` exige un vrai bundle.** Il en existe un avec M7, mais on ne
+  bascule pas dessus dans ce lot : `notify()` par `osascript` fonctionne, et changer ça
+  ici mélangerait deux sujets.
+- **Le déterminisme de `clang` n'est pas garanti** à travers une mise à jour des outils
+  en ligne de commande. C'est ce qui rend `--force` bavard obligatoire.
 
 ## Checklist de validation native
 
 Montage : `.claude/mac-validation/README.md`, étapes numérotées servies une par une,
-somme de contrôle SHA-256 obligatoire sur l'archive servie, et question explicite pour
-tout ce qui ne laisse pas de trace dans un journal.
+somme de contrôle SHA-256 obligatoire sur l'archive servie, question explicite pour tout
+ce qui ne laisse pas de trace dans un journal.
 
-1. `aparte install-app` sur une installation neuve : le bundle apparaît dans
+1. `aparte install-app --open` sur une installation neuve : le bundle apparaît dans
    `~/Applications`, le Finder montre l'icône, Spotlight le trouve.
-2. Ouverture depuis le Finder : **aucun avertissement Gatekeeper**, aucune fenêtre
-   « application endommagée », aucun clic droit nécessaire.
-3. Les deux fenêtres d'autorisation disent **« Aparté »**, pas « Terminal », pas
-   « Python ». Vérifier ensuite dans Réglages Système → Confidentialité et sécurité que
-   c'est bien Aparté qui est listé, avec son icône.
+2. Ouverture : **aucun avertissement Gatekeeper**, aucune fenêtre « application
+   endommagée », aucun clic droit nécessaire. `xattr -lr` le confirme.
+3. Les deux fenêtres disent **« Aparté »**, pas « Terminal », pas « Python ». Vérifier
+   dans Réglages Système que c'est bien Aparté qui est listé, avec son icône.
 4. L'icône de barre de menus apparaît, sans icône du Dock (`LSUIElement`).
 5. Le raccourci fonctionne depuis une application lancée par le Finder.
-6. **Le point qui décide du lot** : accorder les autorisations, faire un
-   `brew upgrade`, rouvrir — les autorisations sont-elles conservées ?
+6. **Le point qui décide du lot** : accorder les autorisations, faire un vrai
+   `brew upgrade`, rouvrir. Relever SHA-256 du bundle, `cdhash`, `codesign -d -r-` et
+   l'état TCC **avant et après**.
 7. Lanceur cassé : renommer le préfixe Homebrew, ouvrir la `.app`, vérifier que la
    fenêtre d'erreur apparaît et nomme la commande.
-8. Menu « Mettre à jour » : dit `brew upgrade`, ne tente ni `git` ni `pip`.
-9. Premier lancement modèle absent : la progression est visible et la phrase dit
-   qu'Aparté ne dictera qu'à la fin.
-10. Démarrage à l'ouverture de session (si M7g est livré) : après redémarrage, l'icône
-    est là **et** les autorisations tiennent — c'est le point où `open -a` se prouve.
+8. `install-app --force` sur un bundle dont le `cdhash` changerait : la confirmation
+   apparaît **avant** le remplacement.
+9. `aparte uninstall-app` puis `brew uninstall` : rien ne reste.
+10. Menu « Mettre à jour » : dit `brew upgrade`, ne tente ni `git` ni `pip`.
+11. Premier lancement modèle absent : la progression est visible et la phrase dit
+    qu'Aparté ne dictera qu'à la fin.
+12. Démarrage à l'ouverture de session (si M7g est livré) : après redémarrage, l'icône
+    est là **et** les autorisations tiennent — c'est là que `open` se prouve.
 
 ## Décisions explicitement écartées
 
@@ -303,23 +367,26 @@ tout ce qui ne laisse pas de trace dans un journal.
   2026 et `--no-quarantine` n'existe plus. Un cask signé demande un compte Apple à
   99 USD/an et un Mac pour signer chaque version.
 - **Cask dans un dépôt personnel qui retire la quarantaine dans son `postflight`** —
-  fonctionne encore aujourd'hui, mais va contre la direction explicite de Homebrew, donc
-  se casse au prochain durcissement. Et il faudrait quand même fabriquer une `.app`
-  reproductible à chaque version sans Mac.
+  fonctionne encore, mais va contre la direction explicite de Homebrew, donc se casse au
+  prochain durcissement. Et il faudrait fabriquer une `.app` reproductible à chaque
+  version sans Mac.
+- **Script shell comme `CFBundleExecutable`** — Apple dit explicitement que TCC attend un
+  Mach-O et qu'un script « expose à des problèmes TCC ». C'est le bénéfice entier du lot
+  qui en dépendait.
+- **`post_install` qui crée le bundle** — les blocs d'installation d'une formula sont
+  sandboxés et `HOME` y est temporaire. Le mécanisme n'écrirait pas où on croit.
 - **`.app` autonome par py2app ou PyInstaller** — plusieurs centaines de mégaoctets,
   demande un Mac pour la construire, et introduit une chaîne de compilation que le projet
-  s'interdit ailleurs. La construction locale par une formula donne le même bundle sans
-  rien de tout ça.
+  s'interdit ailleurs.
 - **Embarquer le modèle Whisper** — tranché : le paquet reste léger, le modèle se
   télécharge au premier lancement avec une progression visible.
 - **Une formula sans `.app`** — la plus simple à maintenir, mais elle laisse les
-  autorisations attribuées à Terminal, c'est-à-dire le défaut de fond que ce lot existe
-  pour corriger.
+  autorisations attribuées à Terminal, le défaut que ce lot existe pour corriger.
 - **Mettre la version d'Aparté dans le bundle** — elle changerait l'empreinte du code à
-  chaque version, et macOS oublierait les autorisations. Le lanceur porte sa propre
-  version, fixe.
+  chaque version, et macOS oublierait les autorisations.
+- **`codesign` best-effort** — un bundle mal signé présenté comme installé est pire que
+  pas d'installation.
 - **Faire lancer le LaunchAgent directement sur le lanceur** — `launchd` deviendrait le
-  processus responsable et l'attribution TCC repartirait à zéro. Il passe par
-  `open -a`.
+  processus responsable et l'attribution TCC repartirait à zéro.
 - **Le dépôt Homebrew officiel** — Aparté n'a pas la notoriété exigée ; un dépôt
   personnel ne coûte qu'un préfixe dans la commande d'installation.
