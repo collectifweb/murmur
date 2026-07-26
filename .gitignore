@@ -10,3 +10,5 @@ build/
 
 .claude/session-state.md
 .claude/handoff
+.claude/mac-validation/serve/
+.claude/mac-validation/logs/
