@@ -1344,9 +1344,12 @@ Whisper a tourné **deux minutes** puis livré une hallucination de symboles. Il
 boucle sur du silence jusqu'à sa limite de jetons, et sur un processeur Intel ça
 dure. `hallucinations.py` ne l'attrape pas (il vise les génériques de sous-titrage).
 Pendant ce temps l'état reste `processing` et le raccourci ne peut plus rien lancer.
-Remède attendu : `vad_filter=True` dans `faster-whisper`, qui coupe les plages sans
-voix avant de décoder — une capture muette devient vide aussitôt, et l'invariant
-« une sortie vide ne touche à rien » fait le reste. À trancher : avant ou après M7.
+**Réglé le 25/07** : `vad_filter=True` dans `FasterWhisperTranscriber`, qui coupe
+les plages sans voix avant de décoder — une capture muette devient vide aussitôt, et
+l'invariant « une sortie vide ne touche à rien » fait le reste. L'argument est retiré
+(jamais mis à `False`) si l'installation le refuse, et le refus se retient. Écrit
+dans `CLAUDE.md` § Hallucinations. Reste à confirmer sur le Mac au prochain passage :
+micro ouvert sans parler, rien ne doit être livré.
 Tout ce qui précède est prouvé sous Linux avec des faux — donc l'orchestration, jamais
 le comportement d'AppKit.
 

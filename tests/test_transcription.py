@@ -51,7 +51,7 @@ class FasterWhisperFallbackTest(unittest.TestCase):
                 if device != "cpu":
                     raise RuntimeError("Library libcublas.so.12 is not found or cannot be loaded")
 
-            def transcribe(self, path, language=None, hotwords=None):
+            def transcribe(self, path, language=None, hotwords=None, vad_filter=False):
                 return [_Segment("hello from cpu")], None
 
         self._install_fake_faster_whisper(FakeModel)
@@ -65,7 +65,7 @@ class FasterWhisperFallbackTest(unittest.TestCase):
             def __init__(self, name, device="auto", compute_type="auto"):
                 self.device = device
 
-            def transcribe(self, path, language=None, hotwords=None):
+            def transcribe(self, path, language=None, hotwords=None, vad_filter=False):
                 if self.device != "cpu":
                     raise RuntimeError("Library libcublas.so.12 cannot be loaded")
                 return [_Segment("recovered on cpu")], None
@@ -80,13 +80,62 @@ class FasterWhisperFallbackTest(unittest.TestCase):
             def __init__(self, name, device="auto", compute_type="auto"):
                 pass
 
-            def transcribe(self, path, language=None, hotwords=None):
+            def transcribe(self, path, language=None, hotwords=None, vad_filter=False):
                 raise RuntimeError("audio file is corrupt")
 
         self._install_fake_faster_whisper(FakeModel)
         transcriber = FasterWhisperTranscriber("small", device="cpu")
         with self.assertRaises(TranscriptionError):
             transcriber.transcribe(Path("x.wav"))
+
+
+class SilenceTest(unittest.TestCase):
+    """Le VAD coupe le silence avant le décodage. Sans lui, une capture muette fait
+    boucler Whisper jusqu'à sa limite de jetons : deux minutes de calcul et une suite
+    de symboles livrée à l'utilisateur, mesuré sur un Mac le 25/07."""
+
+    def _fake_model(self, seen, refuse_vad=False):
+        class FakeModel:
+            def __init__(self, name, device="auto", compute_type="auto"):
+                pass
+
+            def transcribe(self, path, language=None, hotwords=None, **options):
+                seen.append(options.get("vad_filter"))
+                if refuse_vad and "vad_filter" in options:
+                    raise TypeError("transcribe() got an unexpected keyword argument 'vad_filter'")
+                return [_Segment("ok")], None
+
+        module = types.ModuleType("faster_whisper")
+        module.WhisperModel = FakeModel
+        self.addCleanup(lambda: sys.modules.pop("faster_whisper", None))
+        sys.modules["faster_whisper"] = module
+
+    def test_silence_is_trimmed_before_decoding(self):
+        seen = []
+        self._fake_model(seen)
+        FasterWhisperTranscriber("small", device="cpu").transcribe(Path("x.wav"))
+        self.assertEqual(seen, [True])
+
+    def test_an_installation_without_the_vad_still_transcribes(self):
+        # onnxruntime absent, ou faster-whisper trop ancien : transcrire sans le VAD
+        # vaut mieux que ne pas transcrire. L'argument est alors retiré, pas mis à
+        # False — une version qui refuse le VAD refuse l'argument lui-même.
+        seen = []
+        self._fake_model(seen, refuse_vad=True)
+        transcriber = FasterWhisperTranscriber("small", device="cpu")
+        self.assertEqual(transcriber.transcribe(Path("x.wav")).text, "ok")
+        self.assertEqual(seen, [True, None])
+        self.assertFalse(transcriber.vad_filter)
+
+    def test_the_refusal_is_remembered(self):
+        # Une fois par processus, pas une fois par dictée.
+        seen = []
+        self._fake_model(seen, refuse_vad=True)
+        transcriber = FasterWhisperTranscriber("small", device="cpu")
+        transcriber.transcribe(Path("x.wav"))
+        seen.clear()
+        transcriber.transcribe(Path("y.wav"))
+        self.assertEqual(seen, [None])
 
 
 class HotwordsTest(unittest.TestCase):
@@ -97,7 +146,7 @@ class HotwordsTest(unittest.TestCase):
             def __init__(self, name, device="auto", compute_type="auto"):
                 pass
 
-            def transcribe(self, path, language=None, hotwords=None):
+            def transcribe(self, path, language=None, hotwords=None, vad_filter=False):
                 seen.append(hotwords)
                 return [_Segment("ok")], None
 

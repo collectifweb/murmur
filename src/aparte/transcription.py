@@ -72,6 +72,9 @@ class FasterWhisperTranscriber(Transcriber):
     # (missing libcublas/libcudnn). Such failures can surface either when the
     # model is constructed or lazily on the first inference call.
     _CUDA_ERROR_HINTS = ("cublas", "cudnn", "cuda", "libcu", "gpu")
+    # What a refused `vad_filter` looks like: no onnxruntime, or a faster-whisper old
+    # enough not to take the argument at all.
+    _VAD_ERROR_HINTS = ("vad", "onnx", "silero")
 
     def __init__(
         self,
@@ -89,6 +92,10 @@ class FasterWhisperTranscriber(Transcriber):
         # "no bias at all", and that is not the same as an empty string: a blank
         # hint still enters the decoder's prompt.
         self.hotwords = ", ".join(hotwords) or None
+        # Trim silence before decoding. Not a setting: a capture with no speech has
+        # nothing to transcribe, whoever is dictating. Turned off for good on the
+        # first refusal (see _decode).
+        self.vad_filter = True
         self.model = self._load_model(device, compute_type)
 
     def _load_model(self, device: str, compute_type: str):
@@ -123,21 +130,50 @@ class FasterWhisperTranscriber(Transcriber):
         message = str(exc).lower()
         return any(hint in message for hint in cls._CUDA_ERROR_HINTS)
 
+    @classmethod
+    def _is_vad_error(cls, exc: Exception) -> bool:
+        message = str(exc).lower()
+        return any(hint in message for hint in cls._VAD_ERROR_HINTS)
+
+    def _decode(self, audio_path: Path) -> str:
+        """One decoding pass, silence trimmed first.
+
+        Without the VAD, a capture with no speech in it makes Whisper hallucinate in
+        a loop until it hits its token limit: measured on a Mac on 25/07, two minutes
+        of computation ending in a string of symbols delivered to the user, while the
+        recorder stayed stuck on "processing" and the shortcut could start nothing.
+        Trimming the silent stretches first turns that capture into an empty result,
+        and "an empty output touches nothing" does the rest.
+
+        The join stays inside the try: faster-whisper returns a generator, so a decode
+        failure surfaces while iterating, not on the call — that is what the CUDA
+        fallback above needs to catch.
+        """
+        options = {"language": self.language, "hotwords": self.hotwords}
+        if self.vad_filter:
+            # Absent rather than False when it is off: a version old enough to refuse
+            # the VAD refuses the argument itself, whatever its value.
+            options["vad_filter"] = True
+        try:
+            segments, _info = self.model.transcribe(str(audio_path), **options)
+            return " ".join(seg.text.strip() for seg in segments if seg.text.strip())
+        except Exception as exc:
+            if not self.vad_filter or not self._is_vad_error(exc):
+                raise
+            # The VAD needs onnxruntime, and older faster-whisper versions take no
+            # such argument. Transcribing without it beats not transcribing.
+            self.vad_filter = False
+            return self._decode(audio_path)
+
     def transcribe(self, audio_path: Path) -> Transcript:
         try:
-            segments, _info = self.model.transcribe(
-                str(audio_path), language=self.language, hotwords=self.hotwords
-            )
-            text = " ".join(segment.text.strip() for segment in segments if segment.text.strip())
+            text = self._decode(audio_path)
         except Exception as exc:
             # CUDA can fail lazily on the first real inference; retry once on CPU.
             if self.device == "cpu" or not self._is_cuda_error(exc):
                 raise TranscriptionError(str(exc)) from exc
             self.model = self._load_cpu_model()
-            segments, _info = self.model.transcribe(
-                str(audio_path), language=self.language, hotwords=self.hotwords
-            )
-            text = " ".join(segment.text.strip() for segment in segments if segment.text.strip())
+            text = self._decode(audio_path)
         # Le filtre est ici, et pas dans polish.py, pour couvrir aussi les
         # chemins qui ne polissent pas : `--no-polish`, le raccourci global,
         # l'aperçu au fil de la parole.

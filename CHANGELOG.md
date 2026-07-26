@@ -105,6 +105,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A silent recording no longer costs two minutes and a page of symbols.** Opening
+  the microphone without speaking made Whisper hallucinate in a loop until it hit its
+  token limit — two minutes of computation on an Intel Mac, ending in a string of
+  symbols delivered as if it were a dictation, with the recorder stuck on
+  "processing" and the shortcut unable to start anything meanwhile. Silence is now
+  trimmed before decoding (`faster-whisper`'s VAD), so a capture with no speech in it
+  comes back empty, and an empty result has always touched nothing. Installations
+  whose faster-whisper is too old, or that lack onnxruntime, transcribe as before.
 - **macOS, first native run (M8, macOS 11.7.11 Intel).** Everything above was
   proven under Linux with fakes; running it on a real Mac found four defects that
   no mock could show. The Carbon bridge **crashed the process** at the very first

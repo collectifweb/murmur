@@ -143,6 +143,17 @@ de domaine ou de diffuseur, donc se retire partout ; `GENERIC` est dictable
 totalité du texte. Ne jamais mettre un fragment seul comme « Amara.org » dans
 `SIGNED` : « je cite Amara.org » est une dictée légitime.
 
+**Le silence se coupe avant le décodage, pas après.** `FasterWhisperTranscriber`
+passe `vad_filter=True` : sans lui, une capture sans parole fait boucler Whisper
+jusqu'à sa limite de jetons — deux minutes de calcul sur un Mac Intel, puis une
+suite de symboles livrée à l'utilisateur, pendant que l'enregistreur reste bloqué
+sur « transcription » et que le raccourci ne peut plus rien lancer (vu le 25/07).
+`hallucinations.py` ne pouvait pas l'attraper : ce n'était pas un générique de
+sous-titrage. L'argument est **retiré**, jamais mis à `False`, quand l'installation
+le refuse — une version assez ancienne pour refuser le VAD refuse l'argument
+lui-même — et le refus se retient pour le processus entier. Réservé à
+`faster-whisper` : les autres moteurs n'ont pas d'équivalent.
+
 Le remplacement se fait par **une espace, pas par rien** : le motif mange
 l'espace des deux côtés, et retirer un générique au milieu recollerait les
 phrases voisines.
