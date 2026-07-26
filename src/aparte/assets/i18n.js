@@ -19,6 +19,16 @@ window.APARTE_I18N = {
     "hero.sub": "Appuie pour parler, ou utilise ton raccourci clavier global.",
     "hero.sub_incomplete": "Configuration incomplète — ouvre « Configuration » en haut à droite.",
 
+    // Le modèle au premier lancement. La première phrase dit ce qui se passe et
+    // ce qu'on ne peut pas faire en attendant — c'est la seule chose qui compte
+    // quand on vient d'installer et que le bouton ne dicte pas encore.
+    "model.downloading": "Téléchargement du modèle de reconnaissance vocale. Aparté ne pourra pas dicter avant la fin.",
+    "model.ready": "Le modèle est prêt. Tu peux dicter.",
+    "model.failed": "Le téléchargement du modèle a échoué. Aparté réessaiera au prochain lancement.",
+    "model.progress": "{done} sur {total}",
+    "model.progress_unknown": "{done} téléchargés",
+    "model.once": "C'est la seule fois qu'Aparté touche au réseau. Ensuite, tout se passe sur ta machine.",
+
     "editor.placeholder": "Ta dictée apparaîtra ici. Tu peux aussi coller ou taper du texte à polir.",
     "act.polish": "Polir",
     "act.polish_help": "Applique la typographie française et le style choisi au texte de l'éditeur.",
@@ -216,6 +226,13 @@ window.APARTE_I18N = {
     "hero.processing": "One moment…",
     "hero.sub": "Press to talk, or use your global keyboard shortcut.",
     "hero.sub_incomplete": "Setup incomplete — open “Setup” in the top right.",
+
+    "model.downloading": "Downloading the speech model. Aparté can’t dictate until it’s done.",
+    "model.ready": "The model is ready. You can dictate.",
+    "model.failed": "The model download failed. Aparté will try again next launch.",
+    "model.progress": "{done} of {total}",
+    "model.progress_unknown": "{done} downloaded",
+    "model.once": "This is the only time Aparté touches the network. After that, everything stays on your machine.",
 
     "editor.placeholder": "Your dictation appears here. You can also paste or type text to polish.",
     "act.polish": "Polish",

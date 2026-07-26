@@ -38,6 +38,24 @@
       <span class="record-label" data-i18n="hero.talk">Parler</span>
     </button>
     <p class="workspace-sub" id="hero-sub" data-i18n="hero.sub">Appuie pour parler, ou utilise ton raccourci clavier global.</p>
+
+    <!-- Le modèle de reconnaissance (~500 Mo) arrive au premier lancement. Sans
+         cette bande, on voit un bouton qui ne dicte pas et on croit l'application
+         cassée — c'est ce qu'a montré la première installation sur un Mac neuf.
+         L'application télécharge, la page ne fait que regarder : la route est en
+         lecture seule (invariant Darwin). Aucun aplat de couleur, la règle du
+         projecteur vaut ici comme ailleurs.
+         Seule la phrase de #model-line est une région vive, et elle ne change
+         qu'au changement d'étape : le compte d'octets, lui, bougerait chaque
+         seconde dans l'oreille d'un lecteur d'écran. -->
+    <section class="notice" id="model-notice" hidden>
+      <p class="notice-line" id="model-line" aria-live="polite"></p>
+      <div class="notice-meter" id="model-meter" role="progressbar" aria-labelledby="model-line"
+           aria-valuemin="0" aria-valuemax="100" hidden><span id="model-meter-fill"></span></div>
+      <p class="notice-detail" id="model-detail"></p>
+      <p class="notice-detail" id="model-privacy" data-i18n="model.once">C'est la seule fois qu'Aparté touche au réseau. Ensuite, tout se passe sur ta machine.</p>
+    </section>
+
     <div class="status" id="status" role="status" aria-live="polite"></div>
 
     <section class="result">

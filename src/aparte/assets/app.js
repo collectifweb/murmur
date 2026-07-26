@@ -19,6 +19,8 @@ let livePreview = true;
 // Vrai dès qu'un aperçu s'affiche, faux quand la transcription finale a pris sa
 // place : tant qu'il est vrai, le texte de l'éditeur est provisoire.
 let previewing = false;
+// Vrai tant que le modèle de reconnaissance descend : rien ne peut transcrire.
+let modelDownloading = false;
 
 function t(key, vars) {
   let s = (I18N[lang] && I18N[lang][key]) || (I18N.en && I18N.en[key]) || key;
@@ -41,6 +43,10 @@ function applyI18n() {
   if (lastHealth) updateHealthDot(lastHealth);
   if (!$("#health-overlay").hidden) loadHealth();
   renderRecent(recentEntries);
+  // La phrase du modèle est écrite à la main, pas par data-i18n : sans ce
+  // rappel elle resterait dans la langue précédente. modelPhase repart à zéro
+  // pour forcer sa réécriture.
+  if (lastModelState) { modelPhase = null; renderModelState(lastModelState); }
 }
 
 function status(message, kind) {
@@ -71,7 +77,11 @@ function syncActionState() {
   const busy = recordState === "processing" || previewing;
   const empty = !editor.value.trim();
   TEXT_ACTIONS.forEach((sel) => { $(sel).disabled = busy || empty; });
-  $("#pick-file").disabled = busy;
+  $("#pick-file").disabled = busy || modelDownloading;
+  // Tant que le modèle arrive, il n'y a rien pour transcrire : le bouton attend
+  // avec la bande qui explique pourquoi. Sans ça, on lancerait un second
+  // téléchargement du même dépôt par-dessus le premier.
+  recordBtn.disabled = modelDownloading;
 }
 
 // Texte tapé ou collé à la main dans l'éditeur : les actions se rallument.
@@ -788,6 +798,92 @@ function escapeHtml(s) {
 $("#open-health").addEventListener("click", () => { openOverlay("#health-overlay"); loadHealth(); });
 $("#refresh-health").addEventListener("click", loadHealth);
 
+/* ---------- Le modèle au premier lancement ---------- */
+// L'application télécharge, la page ne fait que regarder : la route est en
+// lecture seule, comme l'état de l'enregistrement et celui de l'icône. Elle est
+// absente partout où personne n'a rien lancé — sous Linux, et sur un Mac dont le
+// modèle est déjà là — et un 404 arrête simplement la surveillance.
+const modelNotice = $("#model-notice");
+const modelMeter = $("#model-meter");
+let modelPhase = null;
+let lastModelState = null;
+let modelDoneTimer = null;
+
+function formatMegabytes(bytes) {
+  const mb = Math.round((bytes || 0) / 1e6);
+  try {
+    return new Intl.NumberFormat(lang, {
+      style: "unit", unit: "megabyte", maximumFractionDigits: 0,
+    }).format(mb);
+  } catch (_) {
+    return mb + " MB";  // « Mo » viendrait d'Intl ; sans lui, l'unité anglaise.
+  }
+}
+
+function renderModelState(data) {
+  lastModelState = data;
+  const phase = data.state;
+  const previous = modelPhase;
+  modelDownloading = phase === "downloading";
+  syncActionState();
+  // Rien à raconter : le modèle était déjà là quand la page s'est ouverte, ou il
+  // n'y a rien à chercher (un chemin local, un autre moteur).
+  if (phase === "unavailable" || (phase === "ready" && previous === null)) {
+    modelNotice.hidden = true;
+    return;
+  }
+  modelNotice.hidden = false;
+  modelNotice.classList.toggle("failed", phase === "error");
+  if (phase !== previous) {
+    // Une seule annonce par étape. Le compte d'octets change chaque seconde : le
+    // laisser dans la région vive le ferait répéter sans fin à un lecteur d'écran.
+    modelPhase = phase;
+    $("#model-line").textContent = t(
+      phase === "downloading" ? "model.downloading"
+        : phase === "error" ? "model.failed"
+        : "model.ready"
+    );
+  }
+  $("#model-privacy").hidden = phase !== "downloading";
+  if (phase !== "downloading") {
+    modelMeter.hidden = true;
+    $("#model-detail").textContent = phase === "error" ? (data.error || "") : "";
+    // L'attente est finie : la bande a fait son travail et s'efface.
+    if (phase === "ready") {
+      clearTimeout(modelDoneTimer);
+      modelDoneTimer = setTimeout(() => { modelNotice.hidden = true; }, 8000);
+    }
+    return;
+  }
+  const done = data.downloaded_bytes || 0;
+  const total = data.total_bytes || 0;
+  modelMeter.hidden = false;
+  modelMeter.classList.toggle("unknown", !total);
+  if (total) {
+    const pct = Math.max(0, Math.min(100, Math.round((done / total) * 100)));
+    $("#model-meter-fill").style.width = pct + "%";
+    modelMeter.setAttribute("aria-valuenow", String(pct));
+    $("#model-detail").textContent = t("model.progress", {
+      done: formatMegabytes(done), total: formatMegabytes(total),
+    });
+  } else {
+    // Taille inconnue : aucun pourcentage inventé, donc aucun aria-valuenow —
+    // c'est ainsi qu'une barre se déclare indéterminée.
+    modelMeter.removeAttribute("aria-valuenow");
+    $("#model-detail").textContent = t("model.progress_unknown", { done: formatMegabytes(done) });
+  }
+}
+
+async function watchModel() {
+  try {
+    const res = await fetch("/api/model-state", { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    renderModelState(data);
+    if (data.state === "downloading") setTimeout(watchModel, 1000);
+  } catch (_) {}
+}
+
 /* ---------- Init ---------- */
 applyI18n();
 (async function init() {
@@ -801,6 +897,7 @@ applyI18n();
   } catch (_) {}
   // Après le diagnostic : l'état vide affiche le raccourci qu'il vient d'y lire.
   loadRecent();
+  watchModel();
   // Entrée « Réglages » du menu de la barre système : elle ouvre cette page
   // avec le tiroir déjà déplié.
   if (location.hash === "#settings") openOverlay("#settings-overlay");

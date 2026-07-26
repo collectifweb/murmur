@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
 
-from . import history
+from . import history, model_download
 from .audio import list_microphones, sweep_orphan_recordings
 from .clipboard import copy_text, paste_text
 from .config import Settings, get_env, load_config, positive_int, update_config
@@ -98,6 +98,12 @@ def run_desktop(host: str, port: int, settings: Settings, open_browser: bool = T
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     print(f"Aparté desktop running at {url}")
     if is_macos():
+        # A Mac install is meant to be "open it, grant two permissions". Waiting
+        # in silence for 500 MB on the first dictation is not that, so fetch the
+        # model now and let the page watch it. Darwin only: on Linux the install
+        # is a checkout whose README already explains the one-time fetch, and
+        # spending someone's bandwidth at launch would be a change of behaviour.
+        model_download.start(settings)
         # The global shortcut only works while a live AppKit run loop pumps its
         # events, and that loop must own the main thread — so the server moves to a
         # daemon thread (as it does under the GTK tray on Linux). macos_runloop owns
@@ -329,6 +335,18 @@ def handler_factory(
                         "error": state.error,
                     }
                 )
+                return
+            if route == "/api/model-state":
+                # Read-only, so it stays allowed on Darwin: the download is
+                # started by the application (run_desktop), never from here — a
+                # route that pulled 500 MB would be a system effect reachable
+                # from a browser. 404 while no download was ever started, which
+                # is every Linux run and any Mac whose model is already there.
+                state = model_download.progress()
+                if state is None:
+                    self.send_error(HTTPStatus.NOT_FOUND)
+                    return
+                self._send_json(state)
                 return
             if route == "/api/tray-state":
                 # Read-only, so it stays allowed on Darwin: `aparte doctor` runs in

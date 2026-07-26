@@ -587,6 +587,39 @@ par emplacement, jamais en mesurant, donc un `@2x` absent fait agrandir une imag
 petite. `tests/test_macos_desktop.py` vérifie la longueur déclarée, que chaque
 emplacement porte bien un PNG carré, et que la marge d'Apple est respectée.
 
+### Bande d'attente du modèle (`.notice`)
+
+Le seul moment où Aparté ne peut pas faire ce pour quoi on vient de l'installer :
+le modèle de reconnaissance (~500 Mo) descend, et le disque ne dicte pas encore.
+Sur un Mac neuf, sans rien à l'écran, ça ressemble à une application cassée.
+
+- **Un creux, jamais un aplat.** Fond `surface-2`, filet de 1 px, rayon 10 px,
+  posé entre le sous-titre et le fil d'état. La règle du projecteur s'applique
+  d'abord ici : une bande colorée en haut de la page ferait perdre au disque son
+  monopole de la couleur.
+- **La barre se remplit en `ink-soft`** sur un rail `line` (5,5:1 en clair,
+  5,2:1 en sombre). Pas de carmin, pour la même raison — et parce qu'un produit
+  qui ne peut pas encore dicter a raison de paraître inerte.
+- **Taille inconnue = pas de pourcentage.** Si le service ne dit pas la taille
+  totale, la barre passe en `.unknown` : un fragment de 30 % qui glisse, aucun
+  `aria-valuenow`. Ce qui reste vrai — le nombre de mégaoctets arrivés —
+  s'affiche en dessous. Sous `prefers-reduced-motion`, ce fragment **disparaît**
+  au lieu de s'immobiliser : arrêté, il se lirait « 30 % téléchargés » et
+  mentirait.
+- **L'échec ne teinte que le filet.** `danger` sur ce creux tombe à **4,34:1 en
+  thème sombre**, sous le seuil du projet : le texte reste en encre, et c'est la
+  phrase qui dit l'échec — la règle du daltonien.
+- **Une seule région vive**, la phrase d'étape. Le compte d'octets change chaque
+  seconde ; dans la région vive, un lecteur d'écran le répéterait sans fin.
+- **Le disque d'enregistrement s'éteint pendant ce temps** : fond `surface-2`,
+  filet, libellé en `ink-soft`. Pas `ink-disabled`, qui tombe à 4,34:1 en clair et
+  3,97:1 en sombre sur ce fond — le calcul l'écarte. Le filet lui rend un bord :
+  un creux posé sur le fond de page ne fait que 1,13:1, le disque disparaîtrait.
+
+La bande porte aussi la phrase « c'est la seule fois qu'Aparté touche au réseau » —
+PRODUCT.md § 5 demande que « rien ne sort de la machine » soit **visible**, et le
+seul instant où c'est nuancé est justement celui-là.
+
 ### Motion
 
 150 à 250 ms sur les transitions d'état, courbe `cubic-bezier(0.16, 1, 0.3, 1)`.

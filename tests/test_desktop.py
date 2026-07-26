@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from aparte import cli, desktop, macos_tray
+from aparte import cli, desktop, macos_tray, model_download
 from aparte.config import Settings
 from aparte.desktop import ASSETS_DIR, STATIC_FILES, already_running, handler_factory
 
@@ -503,6 +503,37 @@ class TrayStateRouteTest(unittest.TestCase):
 
     def test_the_route_is_absent_off_darwin(self):
         self.assertEqual(self._get(False, "ok")["status"], int(HTTPStatus.NOT_FOUND))
+
+
+class ModelStateRouteTest(unittest.TestCase):
+    """Read-only, so it is allowed on Darwin. The download is started by the
+    application, never from here: a route that pulled 500 MB would be a system
+    effect a browser could trigger, which is exactly what the Darwin guard exists
+    to prevent. Absent while no download was ever started."""
+
+    def setUp(self):
+        model_download.reset_for_tests()
+        self.addCleanup(model_download.reset_for_tests)
+
+    def test_the_route_is_absent_while_nothing_was_started(self):
+        res = make_request("GET", "/api/model-state")
+        self.assertEqual(res["status"], int(HTTPStatus.NOT_FOUND))
+
+    def test_it_reports_what_the_download_knows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.dict(os.environ, {"HF_HUB_CACHE": directory}):
+                with mock.patch.object(model_download.threading, "Thread"):
+                    model_download.start(Settings(model="small", transcriber="auto"))
+                res = make_request("GET", "/api/model-state")
+        self.assertEqual(res["status"], int(HTTPStatus.OK))
+        body = json.loads(res["body"])
+        self.assertEqual(body["state"], "downloading")
+        self.assertEqual(body["model"], "small")
+
+    def test_the_route_is_a_get_so_the_darwin_guard_never_applies(self):
+        # The guard only covers POST. Keeping this observation read-only is what
+        # makes it allowed on a Mac at all.
+        self.assertNotIn("/api/model-state", desktop._DARWIN_DISABLED_POST_ROUTES)
 
 
 class RecordingStateRouteTest(unittest.TestCase):

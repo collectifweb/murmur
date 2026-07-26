@@ -194,8 +194,19 @@ body {
   gap: var(--sp-1);
   transition: transform var(--dur-fast) var(--ease), background var(--dur) var(--ease);
 }
-.record-btn:hover { transform: translateY(-2px); }
-.record-btn:active { transform: translateY(0); }
+.record-btn:hover:not(:disabled) { transform: translateY(-2px); }
+.record-btn:active:not(:disabled) { transform: translateY(0); }
+/* En attente du modèle : le disque pâlit au lieu de rester sombre et invitant.
+   Le libellé passe en encre atténuée, pas en `--ink-disabled` : celle-ci tombe à
+   4,34:1 en clair et 3,97:1 en sombre sur ce creux, sous le seuil du projet. Le
+   filet lui rend un bord — un creux sur le fond ne fait que 1,13:1, le disque
+   disparaîtrait. La bande juste en dessous dit pourquoi il attend. */
+.record-btn:disabled {
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
 .record-btn .mic { width: 52px; height: 52px; }
 .record-btn .stop-glyph {
   display: none; width: 30px; height: 30px;
@@ -231,6 +242,48 @@ body {
 .workspace-sub { color: var(--ink-soft); margin: 0; font-size: var(--fs-ui); text-align: center; }
 .status { min-height: 20px; font-size: var(--fs-ui); color: var(--ink); font-weight: 500; }
 .status.error { color: var(--danger); }
+
+/* Le modèle qui arrive au premier lancement — une bande en creux, jamais un
+   aplat : la règle du projecteur garde la couleur pour le disque, et un produit
+   qui ne peut pas encore dicter a raison de paraître inerte. La barre se remplit
+   donc en encre atténuée (5,5:1 clair, 5,2:1 sombre sur son rail).
+   L'échec ne teinte que le filet : le rouge sur un creux tombe à 4,34:1 en thème
+   sombre, sous le seuil du projet. C'est la phrase qui dit l'échec, pas la
+   couleur — la règle du daltonien. */
+.notice {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.notice-line { margin: 0; font-size: var(--fs-ui); color: var(--ink); font-weight: 500; }
+.notice-detail { margin: 0; font-size: var(--fs-caption); color: var(--ink-soft); }
+.notice-detail:empty { display: none; }
+.notice.failed { border-color: var(--danger); }
+.notice-meter {
+  height: 4px;
+  border-radius: var(--r-full);
+  background: var(--line);
+  overflow: hidden;
+}
+.notice-meter > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--ink-soft);
+  transition: width var(--dur) var(--ease);
+}
+/* Taille inconnue : on ne fabrique pas un pourcentage. Un fragment qui glisse
+   dit « ça travaille » sans rien prétendre sur la fin. */
+.notice-meter.unknown > span { width: 30%; animation: notice-slide 1.8s ease-in-out infinite; }
+@keyframes notice-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(333%); }
+}
 
 /* Éditeur — le produit fini */
 .result { width: 100%; margin-top: var(--sp-1); }
@@ -490,7 +543,11 @@ textarea.kv {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  .record-btn:hover { transform: none; }
+  .record-btn:hover:not(:disabled) { transform: none; }
   .record-btn.recording .record-ring { opacity: 1; }
   .record-btn.processing .record-ring { opacity: 1; border-top-color: var(--on-brand); }
+  /* Sans son glissement, le fragment de 30 % se lit « 30 % téléchargés » et
+     ment. L'état reste lisible sans lui : le compte d'octets est écrit juste
+     en dessous. */
+  .notice-meter.unknown { display: none; }
 }
