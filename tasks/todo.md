@@ -1301,10 +1301,46 @@ qui est impossible ici : pas de PyObjC sous Linux).
   vient du serveur (la route est refusée là-bas), pas d'une supposition du
   navigateur — c'est donc `/api/update/check` qui le porte.
 
-**Ce qui reste à prouver sur un vrai Mac** : checklist en fin de
-`docs/plan-portage-macos-m6.md`. Les cinq étapes sont écrites et prêtes à servir —
-`.claude/mac-validation/m6/` (montage inchangé, `.claude/mac-validation/README.md`).
-Il manque une seule chose : le Mac et quelqu'un devant.
+**Validation native faite le 25/07** (macOS 11.7.11 Intel, cinq étapes, journaux
+dans `.claude/mac-validation/journaux/m6-etape*.log`). Les neuf points de la
+checklist sont passés :
+
+- l'icône apparaît sans voler le focus, lisible en barre claire **et** sombre ;
+- premier appui : forme changée et minuteur en marche en une demi-seconde environ
+  (sondage 0,25 s + ouverture du micro + bip) ; le disque plein remplace bien les
+  trois barres, le minuteur se pose à sa droite ;
+- `…` visible pendant la transcription, retour au repos ensuite ;
+- la ligne du menu dit le raccourci réellement inscrit ; copier et réglages marchent ;
+- mise à jour refusée pendant une dictée ; au repos, état `manual` et
+  **`can_apply: false`** — le champ ajouté en M6d se vérifie sur la machine ;
+- « Quitter » démonte, aucun processus, port rendu ;
+- sans `rumps` : rien dans la barre, aucune notification, serveur et raccourci
+  intacts, `doctor` donne la commande d'installation.
+
+**Deux défauts trouvés et corrigés dans la foulée.**
+
+- `aparte doctor` annonçait « missing Menu-bar icon · start Aparté » **pendant que
+  l'icône était dans la barre**. Il tourne dans un autre processus que le serveur :
+  il ne pouvait que deviner. Correctif : `GET /api/tray-state` (lecture seule,
+  Darwin), interrogée en 0,5 s avec repli sur ce qui est installé. Même remède que
+  M5 pour le raccourci, même famille de défaut que M8.
+- Le démontage était **muet**. « Quitter a tout démonté » et « le processus est
+  mort » laissaient exactement la même trace : aucune. « Stopping desktop server. »
+  passe en tête de `teardown()`, plus sur la branche `KeyboardInterrupt` — le seul
+  chemin que macOS ne prend jamais.
+
+**La question ouverte est tranchée** : sous rumps, un SIGINT tue le processus net,
+sans démontage, comme sous `_appkit_run_loop`. La contre-expertise supposait
+l'inverse. Écrit dans `CLAUDE.md` maintenant qu'on l'a observé.
+
+**Dette repérée pendant la validation, hors M6** : micro ouvert sans parler →
+Whisper a tourné **deux minutes** puis livré une hallucination de symboles. Il
+boucle sur du silence jusqu'à sa limite de jetons, et sur un processeur Intel ça
+dure. `hallucinations.py` ne l'attrape pas (il vise les génériques de sous-titrage).
+Pendant ce temps l'état reste `processing` et le raccourci ne peut plus rien lancer.
+Remède attendu : `vad_filter=True` dans `faster-whisper`, qui coupe les plages sans
+voix avant de décoder — une capture muette devient vide aussitôt, et l'invariant
+« une sortie vide ne touche à rien » fait le reste. À trancher : avant ou après M7.
 Tout ce qui précède est prouvé sous Linux avec des faux — donc l'orchestration, jamais
 le comportement d'AppKit.
 

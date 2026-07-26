@@ -1,0 +1,75 @@
+=== Aparté M6 · étape 5 : le repli sans rumps ===
+
+--- 1/6 désinstallation de rumps (elle sera annulée en fin d'étape) ---
+src/aparte mis à jour (somme vérifiée)
+Uninstalling rumps-0.4.0:
+  Successfully uninstalled rumps-0.4.0
+ModuleNotFoundError: No module named 'rumps'
+
+--- 2/6 doctor doit le signaler, sans crier ---
+
+Transcription
+  ok      Local Whisper backend
+  ok      Speech model downloaded
+
+Microphone
+  ok      Microphone recorder
+  ok      Microphone permission
+
+Insertion
+  ok      Accessibility permission
+  ok      Clipboard copy
+
+System
+  ok      Desktop notifications
+  ok      Config file
+  missing Dictation shortcut
+  missing Menu-bar icon
+
+status  idle
+ready   yes
+hotkey  bound to ⌃⌥D
+
+Next steps:
+- Menu-bar icon: pip install -e ".[macos]"
+- Dictation shortcut: ⌃⌥D · start Aparté to activate it
+
+--- 3/6 démarrage : le serveur doit vivre comme avant ---
+serveur vivant (pid 5593)
+Aparté desktop running at http://127.0.0.1:8765
+page d'accueil : HTTP 200
+hotkey-state   : {"registered": true, "configured_key": "ctrl+opt+d", "status": null, "error": null}
+
+--- 4/6 aucune notification alarmante ne doit être apparue ---
+  (une dépendance absente est un choix, pas une panne — seul un échec
+   inattendu a le droit de klaxonner)
+  As-tu vu passer une notification ? Laquelle ? :   → notification : non
+  Y a-t-il quelque chose dans la barre de menus ? (attendu : rien) :   → barre de menus : non
+
+--- 5/6 le raccourci doit encore dicter ---
+  Appuie ⌃⌥D, dis une phrase, appuie ⌃⌥D. Sans icône, le seul retour est
+  le bip — c'est exactement la situation d'avant M6.
+  Entrée quand c'est fait :   Le texte a-t-il été inséré ? :   → dictée sans icône : Oui
+recording-state : {"state": "idle"}
+
+--- 6/6 remise en état ---
+/Users/marie-piergervais/aparte-m8/step.sh: line 79:  5593 Terminated: 15          nohup "$PY" -m aparte desktop --no-browser > desktop-sans-rumps.log 2>&1 < /dev/null
+      Successfully uninstalled aparte-1.1.1
+
+Successfully installed aparte-1.1.1 rumps-0.4.0
+rumps de retour : 0.4.0
+serveur relancé
+  l'icône est-elle revenue ? :   → icône après réinstallation : oui
+
+--- 7/7 la preuve qui manquait à l'étape 4 : « Quitter » démonte-t-il ? ---
+
+  Clique « Quitter » dans le menu de l'icône, une dernière fois.
+  Fait ? Entrée pour vérifier :   --- fin du journal du serveur ---
+Aparté desktop running at http://127.0.0.1:8765
+
+Stopping desktop server.
+  ✓ le démontage a bien eu lieu (la ligne est là)
+  ✓ aucun processus
+  ✓ port 8765 libre
+
+=== étape 5 terminée — M6 est passée sur cette machine ===

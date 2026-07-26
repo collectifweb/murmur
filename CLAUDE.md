@@ -425,9 +425,19 @@ phrases voisines.
     l'icône était dans la barre** — vu à la première validation native de M6, et
     exactement le défaut que M5 avait déjà corrigé pour le raccourci. Le panneau web
     ne demande jamais : il est servi par le processus qui a construit l'icône.
-  - **Ne pas écrire d'invariant sur le Ctrl-C sous rumps** avant de l'avoir observé
-    sur un Mac — c'est exactement l'erreur corrigée en M8.
-    (M6, `docs/plan-portage-macos-m6.md`.)
+  - **Sous rumps, un SIGINT tue le processus net** — observé le 25/07 sur le Mac de
+    validation : aucun `KeyboardInterrupt`, aucun démontage, exactement comme sous
+    `_appkit_run_loop`. La contre-expertise supposait l'inverse (rumps réinstalle
+    SIGINT par `installMachInterrupt()`, donc la main reviendrait) ; c'est faux. Sans
+    dégât — tout est en mémoire — mais la **seule** sortie qui démonte est
+    « Quitter ».
+  - **Le démontage s'annonce** : « Stopping desktop server. » est imprimé en tête de
+    `teardown()`, jamais sur la branche `KeyboardInterrupt`. Sans cette ligne,
+    « Quitter a tout démonté » et « le processus est mort » sont indistinguables — ni
+    processus survivant, ni port pris, dans les deux cas. La validation native de M6
+    s'y est cassé les dents avant de la déplacer.
+    (M6, `docs/plan-portage-macos-m6.md` ; journaux
+    `.claude/mac-validation/journaux/m6-etape*.log`.)
 - **Le micro macOS se demande explicitement, sinon on enregistre du silence.**
   Ouvrir un flux PortAudio **ne déclenche aucune fenêtre TCC** : le flux s'ouvre
   « sans erreur » pendant que le statut reste `not_determined`, et la capture ne

@@ -94,8 +94,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still owns the recorder. Updating from the web panel is unavailable on macOS — the
   route was already refused there — and the panel now says where to update instead.
   Without the `[macos]` extra there is simply no icon, and `aparte doctor` says how
-  to get one. Linux behaviour is unchanged. Proven with mocked unit tests on Linux;
-  the native menu bar is validated on a Mac.
+  to get one. Linux behaviour is unchanged. Validated on a real Mac in five passes:
+  the icon appears without stealing focus and reads on a light and a dark menu bar,
+  the shape changes and the timer runs within half a second of the keypress, the menu
+  reports the shortcut's real registration, Quit tears everything down, and removing
+  `rumps` leaves the server and the shortcut working exactly as before. That run
+  found two defects, both fixed: `aparte doctor` announced a missing icon while the
+  icon was on screen (it runs in another process, and now asks the server), and the
+  teardown was silent, making a clean Quit indistinguishable from a killed process.
 
 ### Fixed
 
