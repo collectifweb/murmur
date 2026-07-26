@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" role="img" aria-label="Aparté">
+  <!-- Icône de barre de menus macOS, état au repos. Source du PNG « template » :
+       du noir et de l'alpha, rien d'autre — macOS teinte lui-même, noir sur barre
+       claire, blanc sur barre sombre. Pas de carmin ici, contrairement au panneau
+       Linux : la barre de menus est translucide sur le fond d'écran, donc aucune
+       couleur fixe n'y est vérifiable par calcul (DESIGN.md, la règle du calcul).
+
+       Les trois barres de la marque, ramenées à 2 points de large : c'est le poids
+       de trait des icônes système, et cinq barres se colleraient à cette taille.
+       Dessiné sur 40 px pour tomber au pixel près à 20 points sur un écran Retina ;
+       toutes les coordonnées sont paires pour rester net à la moitié aussi.
+
+       Le commentaire est à l'intérieur de la balise racine, jamais au-dessus : voir
+       aparte-tray.svg, et le test qui monte la garde. -->
+  <g fill="#000000">
+    <rect x="8" y="12" width="4" height="16" rx="2"/>
+    <rect x="18" y="6" width="4" height="28" rx="2"/>
+    <rect x="28" y="12" width="4" height="16" rx="2"/>
+  </g>
+</svg>

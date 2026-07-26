@@ -504,6 +504,50 @@ désigne comme le chemin principal du produit alors qu'une demi-phrase seulement
 le mentionne, et la mention **« rien ne sort de la machine »**, premier argument
 du produit et aujourd'hui absent de l'écran.
 
+### Icône de barre de menus (macOS)
+
+Le seul élément du système qui vit **hors** de la page, et le seul où la palette ne
+s'applique pas. Deux fichiers, `aparte-menubar.svg` et `aparte-menubar-recording.svg`,
+rasterisés en PNG de 40 px (20 points sur un écran Retina) et commités.
+
+**Pourquoi le monochrome y bat le carmin.** Une image « template » n'a pas de
+couleur : macOS n'en lit que l'alpha et la teinte lui-même, en noir sur une barre
+claire, en blanc sur une barre sombre. C'est ce que le système attend, et c'est
+surtout la seule réponse honnête à **la règle du calcul** : la barre de menus est
+translucide sur le fond d'écran de l'utilisateur, donc aucune couleur fixe n'y a de
+fond contre lequel se vérifier. Le carmin y a été mesuré à 5,4:1 sur une barre claire
+et **2,7:1** sur une barre sombre — et ces deux chiffres ne veulent rien dire, puisque
+ce qui est derrière est une photo. La règle du projecteur garde donc son aplat carmin
+là où il est calculable : le bouton d'enregistrement de la page.
+
+**Comment l'état se lit sans la couleur.** Trois signaux non chromatiques, un de plus
+que le minimum exigé par la règle du daltonien :
+
+1. **La silhouette.** Au repos, les trois barres de la marque, à 2 points de large —
+   le poids de trait des icônes système, et cinq barres se colleraient à cette taille.
+   Pendant l'enregistrement, un disque plein de 12 points : étalé et rayé d'un côté,
+   compact et rond de l'autre. L'encre passe de 228 à 432 pixels pleins, soit **près
+   du double de masse**, ce qui est ce qui s'attrape en vision périphérique.
+2. **Le minuteur**, à côté de l'icône, seulement pendant la capture. Des chiffres qui
+   défilent se remarquent mieux qu'une forme qui change une fois.
+3. **La première ligne du menu**, en toutes lettres et dans les deux langues.
+
+**Contraintes de dessin.** Toutes les coordonnées sont paires sur le canevas de 40,
+pour rester net à la moitié sur un écran non Retina. Le glyphe occupe 14 points sur
+20, donc il ne bouscule pas ses voisins dans la barre. Aucun fond, aucun carré : le
+carré carmin du logo appartient au lanceur et au panneau Linux, pas ici.
+
+Les PNG sont **commités** — un contributeur n'a aucune étape de fabrication à passer.
+Après avoir retouché un SVG, les régénérer depuis `src/aparte/assets/` :
+
+```bash
+inkscape --export-type=png --export-filename=aparte-menubar.png \
+         --export-width=40 --export-height=40 aparte-menubar.svg
+```
+
+`tests/test_macos_tray.py` vérifie ensuite les dimensions, l'absence de pixel coloré,
+qu'aucune des deux icônes n'est vide, et l'écart de masse d'encre entre les deux.
+
 ### Motion
 
 150 à 250 ms sur les transitions d'état, courbe `cubic-bezier(0.16, 1, 0.3, 1)`.

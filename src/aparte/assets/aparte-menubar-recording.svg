@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" role="img" aria-label="Aparté — enregistrement">
+  <!-- Icône de barre de menus macOS, micro ouvert. Un disque plein : la silhouette
+       ne ressemble à rien de l'état de repos — compacte et ronde contre étalée et
+       rayée — et elle pèse près du double d'encre, ce qui est ce qui s'attrape du
+       coin de l'œil. Le point plein est aussi le signe universel de l'enregistrement.
+
+       C'est la forme qui dit l'état, jamais la couleur : une image template n'en a
+       aucune. Troisième signal, le minuteur qui défile à côté (macos_tray.py).
+
+       Commentaire à l'intérieur de la balise racine : voir aparte-tray.svg. -->
+  <circle cx="20" cy="20" r="12" fill="#000000"/>
+</svg>

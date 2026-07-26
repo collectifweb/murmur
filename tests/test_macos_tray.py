@@ -6,7 +6,9 @@ the shortcut's registration state onto icon, title and menu lines. The native
 binding is exercised (with a fake rumps) in test_macos_runloop.
 """
 
+import struct
 import unittest
+import zlib
 from unittest import mock
 
 from aparte import macos_tray
@@ -346,6 +348,92 @@ class BuildTrayTest(unittest.TestCase):
             self.assertIsNone(self._build())
         self.notify.assert_called_once()
         self.assertEqual(self.notify.call_args.kwargs.get("urgency"), "critical")
+
+
+def _png_rgba(path):
+    """Decode a PNG into (width, height, pixels) with the standard library only.
+
+    Pillow is not a project dependency, and the guarantees below are worth decoding
+    for: an icon that renders as nothing is exactly the M8 defect M6 exists to close,
+    and a header check alone would not catch a fully transparent file.
+    """
+    data = path.read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"{path.name} is not a PNG")
+    idat, header, offset = b"", None, 8
+    while offset < len(data):
+        (length,) = struct.unpack(">I", data[offset:offset + 4])
+        kind = data[offset + 4:offset + 8]
+        payload = data[offset + 8:offset + 8 + length]
+        if kind == b"IHDR":
+            header = payload
+        elif kind == b"IDAT":
+            idat += payload
+        offset += 12 + length
+    width, height, depth, colour, _comp, _filt, interlace = struct.unpack(">IIBBBBB", header)
+    if (depth, colour, interlace) != (8, 6, 0):
+        raise ValueError(f"{path.name}: expected 8-bit RGBA, non-interlaced")
+    raw = zlib.decompress(idat)
+    stride, pixels, previous = width * 4, [], bytearray(width * 4)
+    for row in range(height):
+        start = row * (stride + 1)
+        method, line = raw[start], bytearray(raw[start + 1:start + 1 + stride])
+        for i in range(stride):
+            left = line[i - 4] if i >= 4 else 0
+            up = previous[i]
+            upleft = previous[i - 4] if i >= 4 else 0
+            if method == 1:
+                line[i] = (line[i] + left) & 0xFF
+            elif method == 2:
+                line[i] = (line[i] + up) & 0xFF
+            elif method == 3:
+                line[i] = (line[i] + (left + up) // 2) & 0xFF
+            elif method == 4:
+                p = left + up - upleft
+                pa, pb, pc = abs(p - left), abs(p - up), abs(p - upleft)
+                nearest = left if (pa <= pb and pa <= pc) else (up if pb <= pc else upleft)
+                line[i] = (line[i] + nearest) & 0xFF
+        pixels.extend(tuple(line[i:i + 4]) for i in range(0, stride, 4))
+        previous = line
+    return width, height, pixels
+
+
+class IconAssetTest(unittest.TestCase):
+    """The two committed PNGs. No build step: a contributor gets them as they are."""
+
+    def setUp(self):
+        self.icons = {
+            name: _png_rgba(macos_tray.ASSETS_DIR / name)
+            for name in (ICON_IDLE, ICON_RECORDING)
+        }
+
+    def test_both_are_forty_pixel_squares(self):
+        # 40 px lands exactly on 20 points on a Retina screen, and halves cleanly
+        # otherwise — rumps displays a menu-bar image at 20 points.
+        for name, (width, height, _) in self.icons.items():
+            with self.subTest(icon=name):
+                self.assertEqual((width, height), (40, 40))
+
+    def test_they_are_template_images_black_plus_alpha(self):
+        # macOS tints a template image itself and reads only the alpha channel. A
+        # coloured pixel would be silently ignored at runtime — and a sign the file
+        # was re-exported from something other than its monochrome source.
+        for name, (_, _, pixels) in self.icons.items():
+            with self.subTest(icon=name):
+                coloured = [p for p in pixels if p[3] > 0 and p[:3] != (0, 0, 0)]
+                self.assertEqual(coloured, [])
+
+    def test_neither_icon_is_invisible(self):
+        # A fully transparent icon draws nothing at all: precisely the M8 defect.
+        for name, (_, _, pixels) in self.icons.items():
+            with self.subTest(icon=name):
+                self.assertGreater(sum(1 for p in pixels if p[3] > 200), 100)
+
+    def test_recording_is_visibly_heavier_than_idle(self):
+        # The design decision, made testable: the state is read from the corner of
+        # the eye, so the two silhouettes must differ in ink mass, not just in shape.
+        ink = {name: sum(1 for p in pixels if p[3] > 200) for name, (_, _, pixels) in self.icons.items()}
+        self.assertGreater(ink[ICON_RECORDING], ink[ICON_IDLE] * 1.5)
 
 
 class LanguageTest(unittest.TestCase):
