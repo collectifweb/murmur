@@ -147,6 +147,11 @@ def serve_macos(
             if torn:
                 return
             torn = True
+            # Announced here, not on the KeyboardInterrupt branch: that branch is the
+            # one path macOS almost never takes, and the first native run of M6 had no
+            # way to tell "Quit tore everything down" from "the process just died" —
+            # both leave no process and a free port. A silent teardown is unprovable.
+            print("\nStopping desktop server.")
             steps = []
             if tray is not None:
                 steps.append(("tray", tray.close))
@@ -168,7 +173,7 @@ def serve_macos(
     try:
         run_loop(on_ready, teardown)
     except KeyboardInterrupt:
-        print("\nStopping desktop server.")
+        pass  # the teardown below says so, whichever door we left by
     finally:
         teardown()
 

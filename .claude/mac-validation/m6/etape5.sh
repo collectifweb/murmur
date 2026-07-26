@@ -4,6 +4,7 @@
 # d'installation, pas une panne. Le serveur, le raccourci et la dictée doivent
 # marcher exactement comme avant, et `doctor` doit dire comment récupérer l'icône.
 export PYTHONUNBUFFERED=1
+RELAY=http://IP-DU-POSTE-LINUX:8010
 APP="$HOME/aparte"
 PY="$APP/.venv/bin/python"
 cd "$APP" || exit 1
@@ -13,6 +14,12 @@ echo "=== Aparté M6 · étape 5 : le repli sans rumps ==="
 echo ""
 echo "--- 1/6 désinstallation de rumps (elle sera annulée en fin d'étape) ---"
 pkill -f "aparte desktop" 2>/dev/null; sleep 1
+# Le démontage s'annonce maintenant sur sa propre ligne : l'étape 4 ne pouvait pas
+# distinguer « Quitter a tout démonté » de « le processus est mort », les deux ne
+# laissant ni processus ni port pris. La section 7 ci-dessous en fait la preuve.
+curl -fsS --connect-timeout 8 "$RELAY/src.tar.gz" -o src.tar.gz \
+  && tar xzf src.tar.gz -C src && echo "src/aparte mis à jour" \
+  || echo "téléchargement impossible — on continue avec le code en place"
 "$PY" -m pip uninstall -y rumps 2>&1 | tail -2
 "$PY" -c "import rumps" 2>&1 | tail -1
 
@@ -58,6 +65,22 @@ sleep 6
 pgrep -f "aparte desktop" >/dev/null && echo "serveur relancé" || echo "serveur NON relancé"
 echo -n "  l'icône est-elle revenue ? : "; read -r rep_retour
 echo "  → icône après réinstallation : $rep_retour"
+
+echo ""
+echo "--- 7/7 la preuve qui manquait à l'étape 4 : « Quitter » démonte-t-il ? ---"
+echo ""
+echo "  Clique « Quitter » dans le menu de l'icône, une dernière fois."
+echo -n "  Fait ? Entrée pour vérifier : "; read -r _
+sleep 2
+echo "  --- fin du journal du serveur ---"
+tail -6 desktop.log
+if grep -q "Stopping desktop server" desktop.log; then
+  echo "  ✓ le démontage a bien eu lieu (la ligne est là)"
+else
+  echo "  ✗ AUCUNE trace de démontage : « Quitter » a tué le processus sans passer par là"
+fi
+pgrep -f "aparte desktop" >/dev/null && echo "  ✗ un processus survit" || echo "  ✓ aucun processus"
+lsof -nP -iTCP:8765 -sTCP:LISTEN >/dev/null 2>&1 && echo "  ✗ port 8765 occupé" || echo "  ✓ port 8765 libre"
 
 echo ""
 echo "=== étape 5 terminée — M6 est passée sur cette machine ==="

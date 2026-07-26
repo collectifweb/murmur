@@ -7,6 +7,8 @@ reaches toggle() off the calling thread, teardown runs in a fixed order, and a
 registration failure keeps the server serving instead of crashing.
 """
 
+import contextlib
+import io
 import threading
 import unittest
 from types import SimpleNamespace
@@ -228,6 +230,14 @@ class TrayRunLoopTest(unittest.TestCase):
         register = self._serve(FakeTray(self.order))
         self.assertEqual(register.spec, "ctrl+opt+d")
         self.assertTrue(self.server.serving.is_set())
+
+    def test_the_teardown_announces_itself(self):
+        # The first native run could not tell "Quit tore everything down" from "the
+        # process died": both leave no process and a free port. The line is the proof.
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self._serve(FakeTray(self.order, quit_clicked=True))
+        self.assertIn("Stopping desktop server.", out.getvalue())
 
     def test_quitting_from_the_menu_tears_down_in_order(self):
         # The tray goes first (its timers stop polling a controller about to close),

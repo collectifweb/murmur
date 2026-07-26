@@ -15,8 +15,8 @@ L'humain double-clique l'icône du Bureau, attend « Journal envoyé », et on l
 `logs/step.log`. Ranger ensuite chaque journal dans `../journaux/` sous son nom
 d'étape, comme pour M8.
 
-**Adapter `RELAY=` en tête de `etape1.sh` et de `etape4.sh`** (l'IP du poste
-Linux), comme dans `amorce.sh` — ce sont les deux seules qui téléchargent du code.
+**Adapter `RELAY=` en tête de `etape1.sh`, `etape4.sh` et `etape5.sh`** (l'IP du poste
+Linux), comme dans `amorce.sh` — ce sont les trois qui téléchargent du code.
 L'étape 4 recharge `src.tar.gz` avant sa relance, pour vérifier au passage ce que
 l'étape 1 a fait corriger.
 
@@ -28,7 +28,7 @@ l'étape 1 a fait corriger.
 | 2 | 3, 4 | l'icône change en moins d'une demi-seconde, le minuteur défile, `…` pendant la transcription |
 | 3 | 5, 8 | les lignes du menu disent l'état réel ; la mise à jour refuse pendant une dictée |
 | 4 | 6, 7 | « Quitter » démonte tout ; le Ctrl-C (envoyé par le script, jamais tapé) est **observé**, pas supposé |
-| 5 | 9 | sans `rumps`, le serveur et le raccourci marchent, et `doctor` le dit |
+| 5 | 9, puis 6 à nouveau | sans `rumps`, le serveur et le raccourci marchent, `doctor` le dit ; puis « Quitter » laisse enfin sa trace |
 
 ## Deux règles du montage qui comptent particulièrement ici
 

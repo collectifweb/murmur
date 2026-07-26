@@ -1,0 +1,47 @@
+=== Aparté M6 · étape 4 : « Quitter », puis Ctrl-C ===
+
+--- 1/6 état de départ ---
+3608 /Library/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -m aparte desktop --no-browser
+port 8765 : occupé
+
+--- 2/6 à toi : clique « Quitter » dans le menu de l'icône ---
+  Fait ? Entrée pour vérifier :   attendu 1 s
+  ✓ aucun processus « aparte desktop »
+  ✓ port 8765 rendu
+  --- fin du journal du serveur (le démontage doit s'y voir) ---
+Aparté desktop running at http://127.0.0.1:8765
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
+
+--- 3/6 rien ne doit rester du micro ---
+  ✓ aucun enregistreur ni lecteur de son en vie
+-rw-r--r--  1 marie-piergervais  staff  7982 25 jul 15:54 /var/folders/20/kb6m4r2934b3_lxxrdv4lljw0000gn/T//aparte-501-beep-start.wav
+-rw-r--r--  1 marie-piergervais  staff  7982 25 jul 15:54 /var/folders/20/kb6m4r2934b3_lxxrdv4lljw0000gn/T//aparte-501-beep-stop.wav
+
+/var/folders/20/kb6m4r2934b3_lxxrdv4lljw0000gn/T//aparte-501:
+total 8
+drwxr-xr-x    3 marie-piergervais  staff     96 25 jul 22:12 .
+drwx------  343 marie-piergervais  staff  10976 25 jul 22:14 ..
+-rw-------    1 marie-piergervais  staff    590 25 jul 22:12 history.json
+
+--- 4/6 code corrigé, puis relance pour la seconde sortie ---
+src/aparte mis à jour
+serveur vivant (pid 5358)
+  l'icône est-elle bien revenue dans la barre de menus ? :   → icône après relance : oui
+  --- doctor doit maintenant voir l'icône du serveur qui tourne ---
+  tray-state : {"outcome": "ok"}
+  ok      Menu-bar icon
+
+--- 5/6 SIGINT sur ce PID précis (l'équivalent d'un Ctrl-C) ---
+  le processus est mort sur le SIGINT
+  --- ce qu'il a écrit ---
+Aparté desktop running at http://127.0.0.1:8765
+
+  Ce qu'on cherche : la ligne « Stopping desktop server. »
+  → ABSENTE : le processus est parti sans démonter (mort)
+
+--- 6/6 nettoyage de ce qui traînerait ---
+  ✓ port 8765 libre
+  l'icône a-t-elle disparu de la barre de menus ? :   → icône après SIGINT : oui
+
+=== étape 4 terminée — plus aucun serveur ne tourne ===

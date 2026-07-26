@@ -1,0 +1,84 @@
+=== Aparté M6 · étape 3 : les lignes du menu, et « Mettre à jour » ===
+
+--- 0/5 deux choses vues de trop loin à l'étape 2 ---
+
+  L'étape 2 a laissé deux doutes, et aucun journal ne peut les lever :
+  le minuteur semblait REMPLACER l'icône, et le « … » de la transcription
+  n'a pas été vu. On refait une dictée, en regardant précisément.
+
+  Cette fois, dis une phrase LONGUE — au moins quinze secondes, lis un
+  paragraphe si tu veux. Plus la dictée est longue, plus la transcription
+  qui suit dure, et plus le « … » a le temps de se voir.
+
+   1. appuie ⌃⌥D,
+   2. pendant que tu parles, REGARDE juste à gauche des chiffres,
+   3. appuie ⌃⌥D,
+   4. et continue de regarder pendant la transcription.
+
+  Entrée quand la dictée est finie ET le texte inséré : 
+  a) Pendant que tu parlais : y avait-il un ROND NOIR PLEIN juste à gauche
+     du minuteur, ou seulement les chiffres, tout seuls ?
+  Réponse :   → rond pendant l'enregistrement : Pendant que je parlais, j’ai remarqué que le timer était en train de fonctionner et que ça se déroulait comme c’était absolument prévu. Le petit timer est à droite d’un genre de petit rond comme un enregistreur. Puis je vois l'icone d'Aparté + les 3 points
+
+  b) Et si le rond était là : les trois barres, elles, avaient bien disparu
+     le temps de l'enregistrement ? (c'est voulu — le rond les remplace)
+  Réponse :   → trois barres pendant l'enregistrement : oui
+
+  c) Juste après le second appui, pendant la transcription : as-tu vu
+     trois points « … » à côté des trois barres revenues ?
+  Réponse :   → « … » pendant la transcription : oui
+
+--- 1/5 ce que le serveur sait du raccourci ---
+hotkey-state : {"registered": true, "configured_key": "ctrl+opt+d", "status": null, "error": null}
+config       : Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+AttributeError: 'dict' object has no attribute 'hotkey'
+
+--- 2/5 la ligne du menu doit dire la même chose ---
+
+  Clique l'icône et recopie la ligne du raccourci telle quelle.
+  (« Raccourci : ⌃⌥D », « Aucun raccourci… », « Raccourci indisponible… »)
+  Réponse :   → ligne raccourci : Raccourci : ⌃⌥D
+
+--- 3/5 les autres articles ---
+
+  a) « Copier la dernière dictée » : clique, puis colle (⌘V) dans TextEdit.
+     Est-ce bien la dernière phrase dictée à l'étape 2 ?
+  Réponse :   → copier : POui tout a fait
+
+  b) « Réglages » : le navigateur s'ouvre-t-il sur la page d'Aparté,
+     avec le tiroir des réglages déjà ouvert ?
+  Réponse :   → réglages : oui
+
+--- 4/5 « Rechercher une mise à jour… » pendant une dictée ---
+
+  Enchaîne sans traîner :
+   1. appuie UNE fois sur ⌃⌥D (le micro s'ouvre, le minuteur défile),
+   2. ouvre le menu et clique « Rechercher une mise à jour… »,
+   3. regarde la notification qui apparaît,
+   4. appuie ⌃⌥D pour arrêter.
+
+  Qu'a dit la notification ? :   → mise à jour pendant la dictée : Ca disait qu'une dictée était en cours.
+
+  Attendu : « Une dictée est en cours — réessaie après. » Rien ne doit
+  s'installer, et la dictée ne doit pas être perturbée.
+
+  La dictée s'est-elle terminée normalement malgré le clic ? :   → dictée intacte : vu que je parlais pas, l'icône avait ... et est resté comme ca longtemps. Genre peut être 2 minutes pour finalement générer une hallucination de symboles
+
+--- 5/5 « Rechercher une mise à jour… » au repos ---
+
+  Reclique l'article, cette fois sans dicter. La barre de menus doit rester
+  cliquable pendant la vérification (elle interroge le réseau).
+
+  Qu'a dit la notification ? :   → vérification au repos : Aparté ne tourne pas depuis un depot git
+
+  Le menu est-il resté réactif pendant ce temps ? :   → barre figée ou non : oui
+
+  (Ce Mac reçoit son code par archive, pas par git : « ne suit aucune
+  branche distante » ou « ne tourne pas depuis un dépôt git » sont des
+  réponses justes. L'installation complète attend une vraie release, M7.)
+
+--- pour le journal : ce que le serveur répond à la même question ---
+{"state": "manual", "version": "1.1.1", "can_apply": false}
+
+=== étape 3 terminée — le serveur reste allumé pour l'étape 4 ===

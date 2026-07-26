@@ -1,0 +1,54 @@
+=== Aparté M6 · étape 2 : l'icône pendant une dictée ===
+
+--- 1/4 le serveur de l'étape 1 tourne-t-il toujours ? ---
+oui
+recording-state : {"state": "idle"}
+
+--- 2/4 à toi de jouer ---
+
+  Quand tu appuies sur Entrée ci-dessous, ce script va noter l'heure et
+  observer l'état du serveur pendant 20 secondes.
+
+  Pendant ce temps :
+   1. appuie UNE fois sur ⌃⌥D (Contrôle + Option + D),
+   2. dis une phrase — par exemple « bonjour, ceci est un essai »,
+   3. appuie UNE fois sur ⌃⌥D à nouveau,
+   4. et surtout : REGARDE la barre de menus tout du long.
+
+  N'appuie pas deux fois de suite pour « voir si ça a marché » : c'est
+  exactement le geste qui a fait rater M8. Une pression, et tu regardes.
+
+  Prêt ? Entrée pour lancer l'observation : 
+--- 3/4 observation (200 relevés, environ 20 s) ---
+  relevé 1 (~0 s) : {"state": "idle"}
+  relevé 30 (~3 s) : {"state": "recording"}
+  relevé 71 (~7 s) : {"state": "processing"}
+  relevé 116 (~11 s) : {"state": "idle"}
+  (fin de l'observation)
+
+--- 4/4 ce que le journal ne peut pas voir ---
+
+  a) Au premier appui, en combien de temps l'icône a-t-elle changé ?
+     (« tout de suite » / « un temps » / « pas changé du tout »)
+  Réponse :   → latence appui → icône : Bonjour, ceci est un essai.Ca a pris une demi seconde environ
+
+  b) Le minuteur (0:01, 0:02, …) s'est-il affiché à côté de l'icône,
+     et défilait-il régulièrement ?
+  Réponse :   → minuteur : Il s'est affiché a la place de l'icone et non a cote. Il défilait bien comme il faut.
+
+  c) Après le second appui, as-tu vu « … » à la place du minuteur
+     pendant la transcription ?
+  Réponse :   → titre pendant la transcription : Euh je suis pas sur. Je pense ca a mis l'icone Murmur direct après.
+
+  d) Et à la fin : l'icône est-elle revenue à sa forme de repos
+     (trois barres, plus de minuteur) ?
+  Réponse :   → retour au repos : oui
+
+  e) Le texte a-t-il été inséré quelque part, et la ligne d'état du menu
+     dit-elle « Prêt à dicter » ? (clique l'icône pour voir)
+  Réponse :   → texte livré / état du menu : Yes et oui ca a été inséré sur le terminal
+
+--- l'historique vu par le serveur (dernière entrée) ---
+{"entries": [{"text": "Bonjour, ceci est un essai.", "at": 1785030996.978969}, {"text": "Le micro est en fin de monter.", "at": 1785020589.201775}, {"text": "Je d\u00e9marre un enregistrement et je ne l\u2019arr\u00eate pas, on va voir ce qu\u2019il va se passer.", "at": 1785019329.352749}, {"text": "Thank you.", "at": 1785018542.90899}, {"text": "1, 2, 3.", "at": 1785009302.595318}]}
+
+=== étape 2 terminée — le serveur reste allumé pour l'étape 3 ===
