@@ -257,6 +257,7 @@ def _collect_checks_macos(settings: Settings, hotkey_state=None) -> list[Check]:
         ),
         _hotkey_check(settings, hotkey),
         _tray_check(),
+        _app_bundle_check(),
     ]
     if settings.polish_backend == "ollama":
         checks.append(
@@ -270,6 +271,44 @@ def _collect_checks_macos(settings: Settings, hotkey_state=None) -> list[Check]:
             )
         )
     return checks
+
+
+def _app_bundle_check() -> Check:
+    """Is Aparté.app installed, and does it still match the fingerprint on record?
+
+    Never essential: without the bundle Aparté runs perfectly, the permission
+    dialogs simply carry the name of whatever launched Python. The detail is
+    **dynamic and therefore carries no i18n key** — a static key would overwrite it
+    in the web panel and could contradict its own icon (CLAUDE.md, § Interface).
+
+    The mismatch case is the one worth naming and the one nothing can detect from
+    outside: the permissions are already gone, while System Settings still shows
+    them granted.
+    """
+    from .macos_desktop import bundle_path
+    from .macos_install import installed_state
+
+    label = "Aparté.app"
+    state = installed_state()
+    if not state["installed"]:
+        return Check(
+            "app_bundle",
+            label,
+            False,
+            "System",
+            detail="permission dialogs will name whatever launched Aparté",
+            fix="aparte install-app --open",
+        )
+    if state["matches_reference"] is False:
+        return Check(
+            "app_bundle",
+            label,
+            False,
+            "System",
+            detail="installed bundle differs from the one on record — permissions were lost",
+            fix="aparte install-app --force",
+        )
+    return Check("app_bundle", label, True, "System", detail=str(bundle_path()))
 
 
 def _hotkey_check(settings: Settings, state) -> Check:

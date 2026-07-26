@@ -1314,9 +1314,15 @@ deux réponses.
       (marque 824 sur un canevas 1024, marge transparente), 11 tailles empaquetées
       par `scripts/build-icns.py` — outil de mainteneur, pas une étape de
       construction.
-- [ ] **M7c** — `install-app` (idempotent, `--open`, `--force` qui prévient),
-      `uninstall-app`, `desktop_integration()` sur Darwin, `codesign` **obligatoire**
-      (code de sortie non nul), checks `doctor`.
+- [~] **M7c** — `install-app` (idempotent **par empreinte**, pas par présence ;
+      `--open`, `--force` qui prévient, `--remove`), `uninstall-app`, `codesign`
+      **obligatoire**, check `doctor` `app_bundle` (jamais essentiel, détail
+      dynamique donc sans clé i18n). Écrit le 26/07 **avant** le verdict de M7-0,
+      sur consigne explicite d'Alexandre malgré la porte : les deux choix ouverts
+      sont des constantes nommées en tête de `macos_install.py`
+      (`INSTALL_MODE`, `INSTALL_IDENTITY`), donc appliquer le verdict est un
+      changement d'une ligne. **Reste à faire** : le brancher sur
+      `desktop_integration()` côté Darwin, et le valider nativement.
 - [ ] **M7d** — la formula : Python épinglé, `portaudio`/`libsndfile`, extras
       `whisper,recording,macos` et **jamais `cuda`**, `brew test`, caveats, dépôt
       personnel, `README` et doc du parcours Mac.

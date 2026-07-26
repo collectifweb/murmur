@@ -74,6 +74,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "install-desktop":
             handle_install_desktop(args)
             return 0
+        if args.command == "install-app":
+            handle_install_app(args)
+            return 0
         if args.command == "install-autostart":
             handle_install_autostart(args)
             return 0
@@ -176,6 +179,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     install_desktop.add_argument("--force", action="store_true", help="Overwrite an existing desktop entry.")
     install_desktop.add_argument("--print", action="store_true", help="Print the generated desktop entry instead.")
+
+    install_app = subparsers.add_parser(
+        "install-app",
+        help="macOS: build Aparté.app in ~/Applications so permissions are granted to Aparté.",
+    )
+    install_app.add_argument("--open", action="store_true", help="Open the application once installed.")
+    install_app.add_argument(
+        "--force",
+        action="store_true",
+        help="Replace a bundle that differs. macOS then forgets the granted permissions.",
+    )
+    install_app.add_argument("--remove", action="store_true", help="Remove the application bundle.")
 
     install_autostart = subparsers.add_parser(
         "install-autostart",
@@ -477,6 +492,31 @@ def handle_install_desktop(args: argparse.Namespace) -> None:
         return
     path = desktop.install_desktop_entry(force=args.force)
     print(path)
+
+
+def handle_install_app(args: argparse.Namespace) -> None:
+    """`aparte install-app` — the second of the two commands a Mac install takes.
+
+    macOS only: on Linux the launcher is a `.desktop` entry and `install-desktop`
+    already does the job. Refusing here rather than half-working elsewhere.
+    """
+    from .macos_desktop import stable_interpreter
+    from .macos_install import install_app, open_app, uninstall_app
+
+    if not is_macos():
+        raise RuntimeError(
+            "install-app builds a macOS application bundle. On Linux, use `aparte install-desktop`."
+        )
+    if args.remove:
+        print("removed" if uninstall_app() else "no application bundle to remove")
+        return
+    # The interpreter is named through Homebrew's version-stable `opt` path: the
+    # `Cellar` one disappears at the first `brew upgrade`, and a launcher pointing
+    # at a path that no longer exists is a bundle that no longer starts.
+    result = install_app(stable_interpreter(sys.executable), force=args.force)
+    print(f"{result['outcome']}: {result['bundle']}")
+    if args.open:
+        open_app()
 
 
 def handle_install_autostart(args: argparse.Namespace) -> None:
