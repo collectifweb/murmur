@@ -25,7 +25,24 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parent
 SONDE = RACINE / "sonde.py"
 
-sys.path.insert(0, str(RACINE.parent.parent.parent / "src"))
+
+def _source_du_depot() -> Path | None:
+    """Le `src/` du dépôt, cherché en remontant plutôt que compté en `.parent`.
+
+    Ici le fichier vit dans `.claude/mac-validation/m7/` ; sur le Mac il est copié
+    dans `~/aparte/.claude-m7/`, où le même nombre de remontées désigne `/Users/src`.
+    L'installation éditable suffirait dans les deux cas, mais si elle manque, une
+    erreur d'import au milieu de l'étape 1 coûterait la session entière.
+    """
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "src" / "aparte").is_dir():
+            return parent / "src"
+    return None
+
+
+_source = _source_du_depot()
+if _source is not None:
+    sys.path.insert(0, str(_source))
 
 from aparte import macos_desktop  # noqa: E402
 

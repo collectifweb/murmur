@@ -46,19 +46,47 @@ tenu grâce au cdhash identique ou parce que macOS s'en moquait.
 
 ## Ce qui a déjà été prouvé sous Linux, et qui ne se remesure pas
 
+Le montage entier a été répété ici avec `clang` et `codesign` remplacés par des
+doublures : la seule chose qui manque sur cette machine est macOS lui-même.
+
 - Les quatre combinaisons (deux variantes × avec et sans le changement du scénario B)
   **compilent sans le moindre avertissement**.
+- `construire-sonde.py` produit un bundle complet et bien formé — `Info.plist`
+  lisible par `plistlib` (13 clés, `LSUIElement`, la phrase du micro), l'icône en
+  place, le source C retiré du bundle livré.
+- Le lanceur compilé **lance vraiment la sonde**, qui écrit son journal : la chaîne
+  lanceur → interpréteur → `macos_permissions` tient de bout en bout. Ici tout
+  répond « unknown », ce qui est le comportement voulu hors d'un Mac.
+- **Les deux variantes sont bien deux choses différentes**, et c'est ce que l'étape 2
+  va départager : en `exec`, la chaîne de processus est `bash → python3`, le lanceur
+  a disparu ; en « enfant », c'est `aparte → python3`, un processus vivant dont
+  l'exécutable est *dans* le bundle.
+- **La variante « enfant » transmet ses signaux** : un `SIGTERM` au lanceur est reçu
+  par l'interpréteur, qui sort, sans laisser d'orphelin. C'est le prix de cette
+  variante, et il est payé.
 - Le scénario B **change réellement le binaire** — sinon il ne prouverait rien.
 - Deux compilations du même source donnent un binaire **identique à l'octet** (avec
   `gcc` ici ; c'est `clang` sur le Mac que le scénario A confirme).
 
-## Le piège qui a failli passer
+Ces cinq faits sont dans la suite de tests (`tests/test_macos_desktop.py`,
+`LauncherCompilesTest` et `LauncherRunsTest`), pas seulement dans ce fichier.
+
+## Les deux pièges qui ont failli passer
 
 La première version du lanceur appelait `snprintf` sans `<stdio.h>`. Sous `gcc` c'est un
 avertissement ; sous le `clang` d'un Xcode récent, c'est une **erreur**, et
 `aparte install-app` aurait échoué sur tout Mac à jour. Aucun test de chaîne ne l'aurait
 vu — c'est en compilant le C généré qu'on l'a trouvé. Le test est maintenant dans la
 suite (`tests/test_macos_desktop.py`, `LauncherCompilesTest`).
+
+Le second était dans ce montage-ci. `construire-sonde.py` ajoutait `src/` au chemin
+d'import en comptant un nombre fixe de `.parent` — juste depuis
+`.claude/mac-validation/m7/`, faux depuis `~/aparte/.claude-m7/` où l'étape 1 le
+copie : il désignait `/Users/src`. L'installation éditable du Mac aurait sauvé la
+mise, mais si elle avait manqué, l'étape 1 serait morte sur une erreur d'import
+après le `tccutil reset` — donc en ayant déjà effacé les autorisations qu'on voulait
+observer. Le dossier se cherche maintenant en remontant jusqu'à trouver
+`src/aparte`.
 
 ## Après
 

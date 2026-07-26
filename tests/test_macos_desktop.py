@@ -7,10 +7,13 @@ tests cannot prove — that macOS really attributes the permission to the bundle
 
 from __future__ import annotations
 
+import os
 import plistlib
 import shutil
+import signal
 import struct
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -187,6 +190,79 @@ class LauncherCompilesTest(unittest.TestCase):
         result = self._compile(macos_desktop.LAUNCH_CHILD)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr.strip(), "", result.stderr)
+
+
+class LauncherRunsTest(unittest.TestCase):
+    """Compiling proves the syntax; running proves the two variants are actually
+    different things — which is the whole question M7-0 puts to a Mac.
+
+    ``exec`` replaces the launcher's image, so by the time the interpreter asks for
+    a permission the bundle's executable no longer exists as a process. ``child``
+    keeps it alive as the parent — the unambiguous case — and pays for it in signal
+    forwarding. Both facts are observable here; only macOS's *attribution* is not.
+    """
+
+    def setUp(self):
+        if shutil.which("cc") is None:
+            self.skipTest("no C compiler on this machine")
+        self._temp = tempfile.TemporaryDirectory()
+        self.root = Path(self._temp.name)
+        self.addCleanup(self._temp.cleanup)
+
+    def _build(self, mode, *args):
+        source = self.root / f"{mode}.c"
+        source.write_text(
+            macos_desktop.launcher_source(sys.executable, mode=mode, language="fr", args=args),
+            encoding="utf-8",
+        )
+        binary = self.root / mode
+        subprocess.run(
+            ["cc", "-O2", "-g0", "-fno-common", "-o", str(binary), str(source)],
+            capture_output=True, text=True, check=True,
+        )
+        return binary
+
+    def _parent_of_the_interpreter(self, mode):
+        script = self.root / "who.py"
+        script.write_text("import os\nprint(os.getppid())\n", encoding="utf-8")
+        launcher = self._build(mode, str(script))
+        done = subprocess.run([str(launcher)], capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return int(done.stdout.strip())
+
+    def test_exec_hands_its_own_process_over_to_the_interpreter(self):
+        # No launcher process is left: the interpreter's parent is whoever ran us.
+        self.assertEqual(self._parent_of_the_interpreter(macos_desktop.LAUNCH_EXEC), os.getpid())
+
+    def test_child_stays_alive_as_the_parent(self):
+        # A live process whose executable sits inside the bundle — the case macOS
+        # cannot misread, if the exec variant turns out not to be enough.
+        self.assertNotEqual(self._parent_of_the_interpreter(macos_desktop.LAUNCH_CHILD), os.getpid())
+
+    def test_the_child_variant_forwards_the_signals_it_receives(self):
+        # This is what the variant costs. Left out, quitting Aparté would leave the
+        # interpreter — and on a Mac, an open microphone — behind.
+        script = self.root / "sleeper.py"
+        script.write_text(
+            "import signal, sys, time\n"
+            "signal.signal(signal.SIGTERM, lambda *a: sys.exit(7))\n"
+            "print('ready', flush=True)\n"
+            "time.sleep(30)\n",
+            encoding="utf-8",
+        )
+        launcher = self._build(macos_desktop.LAUNCH_CHILD, str(script))
+        process = subprocess.Popen([str(launcher)], stdout=subprocess.PIPE, text=True)
+        self.addCleanup(process.kill)
+        self.assertEqual(process.stdout.readline().strip(), "ready")
+        children = subprocess.run(
+            ["pgrep", "-P", str(process.pid)], capture_output=True, text=True
+        ).stdout.split()
+        process.send_signal(signal.SIGTERM)
+        process.communicate(timeout=10)
+        self.assertFalse(
+            [pid for pid in children if Path(f"/proc/{pid}").exists()],
+            "the interpreter outlived the launcher that was signalled",
+        )
 
 
 class CompileCommandTest(unittest.TestCase):
