@@ -55,6 +55,7 @@ class MacDiagnosticsTest(unittest.TestCase):
         stack.enter_context(
             mock.patch.object(diagnostics, "_query_hotkey_state", return_value=None)
         )
+        stack.enter_context(mock.patch.object(diagnostics, "_query_tray_state", return_value=None))
         return stack
 
     def test_the_macos_list_has_permissions_and_no_linux_only_checks(self):
@@ -113,6 +114,7 @@ def _mac_env():
     stack.enter_context(mock.patch("aparte.macos_permissions.microphone_authorization", return_value="authorized"))
     stack.enter_context(mock.patch("aparte.macos_permissions.accessibility_trusted", return_value=True))
     stack.enter_context(mock.patch.object(diagnostics, "_query_hotkey_state", return_value=None))
+    stack.enter_context(mock.patch.object(diagnostics, "_query_tray_state", return_value=None))
     return stack
 
 
@@ -211,6 +213,17 @@ class MacMenuBarCheckTest(unittest.TestCase):
                     absent = self._tray(collect_checks(Settings()))
         self.assertIn("start Aparté", present.detail)
         self.assertEqual(absent.fix, macos_tray.MISSING_DEPENDENCY)
+
+    def test_a_running_server_answers_for_the_icon_it_built(self):
+        # The defect the first native run found: `aparte doctor` runs beside the
+        # server, not inside it, and said "start Aparté" while the icon was in the
+        # menu bar. It asks now, and believes the answer.
+        with self._mac_env():
+            with mock.patch.object(macos_tray, "_BUILD_OUTCOME", None):
+                with mock.patch.object(diagnostics, "_query_tray_state", return_value="ok"):
+                    tray = self._tray(collect_checks(Settings()))
+        self.assertTrue(tray.ok)
+        self.assertNotIn("start Aparté", tray.detail)
 
     def test_the_menubar_check_is_never_essential(self):
         # No icon still dictates — from the browser, and from the shortcut.

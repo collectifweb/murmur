@@ -330,6 +330,19 @@ def handler_factory(
                     }
                 )
                 return
+            if route == "/api/tray-state":
+                # Read-only, so it stays allowed on Darwin: `aparte doctor` runs in
+                # its own process and cannot see whether the *server* built its
+                # menu-bar icon. Without this it answered "start Aparté to show the
+                # icon" while the icon was in the bar — the M8 defect on the hotkey
+                # check, in its own words. Absent (404) off macOS.
+                if not is_macos():
+                    self.send_error(HTTPStatus.NOT_FOUND)
+                    return
+                from .macos_tray import tray_build_outcome
+
+                self._send_json({"outcome": tray_build_outcome()})
+                return
             self.send_error(HTTPStatus.NOT_FOUND)
 
         def do_POST(self) -> None:

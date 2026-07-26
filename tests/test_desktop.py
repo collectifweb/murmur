@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from aparte import cli, desktop
+from aparte import cli, desktop, macos_tray
 from aparte.config import Settings
 from aparte.desktop import ASSETS_DIR, STATIC_FILES, already_running, handler_factory
 
@@ -481,6 +481,28 @@ class UpdateCheckRouteTest(unittest.TestCase):
         )
         for key in ('"update.restart_required"', '"update.use_tray"'):
             self.assertEqual(i18n.count(key), 2, key)
+
+
+class TrayStateRouteTest(unittest.TestCase):
+    """Read-only, so it is allowed on Darwin: the CLI doctor cannot see the server's
+    memory, and answering "start Aparté" under a live icon was the defect the first
+    native run of M6 turned up. Absent off macOS, where there is no icon."""
+
+    def _get(self, macos, outcome):
+        with mock.patch.object(desktop, "is_macos", return_value=macos):
+            with mock.patch.object(macos_tray, "_BUILD_OUTCOME", outcome):
+                return make_request("GET", "/api/tray-state")
+
+    def test_it_reports_what_the_server_built(self):
+        res = self._get(True, "ok")
+        self.assertEqual(res["status"], int(HTTPStatus.OK))
+        self.assertEqual(json.loads(res["body"]), {"outcome": "ok"})
+
+    def test_nothing_built_answers_null_rather_than_guessing(self):
+        self.assertEqual(json.loads(self._get(True, None)["body"]), {"outcome": None})
+
+    def test_the_route_is_absent_off_darwin(self):
+        self.assertEqual(self._get(False, "ok")["status"], int(HTTPStatus.NOT_FOUND))
 
 
 class RecordingStateRouteTest(unittest.TestCase):

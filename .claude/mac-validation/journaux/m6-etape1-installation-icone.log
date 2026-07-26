@@ -1,0 +1,71 @@
+=== Aparté M6 · étape 1 : installation et apparition de l'icône ===
+
+--- 1/6 arrêt de ce qui tourne encore ---
+ancien serveur arrêté
+
+--- 2/6 récupération du code de M6 ---
+src/aparte remplacé
+
+--- 3/6 installation de l'extra macos (apporte rumps) ---
+    Found existing installation: aparte 1.1.1
+    Uninstalling aparte-1.1.1:
+      Successfully uninstalled aparte-1.1.1
+Successfully installed aparte-1.1.1
+rumps 0.4.0
+
+--- 4/6 démarrage du serveur, sans ouvrir le navigateur ---
+serveur vivant (pid 3608)
+--- ce qu'il a écrit au démarrage ---
+Aparté desktop running at http://127.0.0.1:8765
+
+--- 5/6 ce que le serveur dit de lui-même ---
+hotkey-state    : {"registered": true, "configured_key": "ctrl+opt+d", "status": null, "error": null}
+recording-state : {"state": "idle"}
+--- doctor (la ligne « Menu-bar icon » est celle de M6) ---
+
+Transcription
+  ok      Local Whisper backend
+  ok      Speech model downloaded
+
+Microphone
+  ok      Microphone recorder
+  ok      Microphone permission
+
+Insertion
+  ok      Accessibility permission
+  ok      Clipboard copy
+
+System
+  ok      Desktop notifications
+  ok      Config file
+  ok      Dictation shortcut
+  missing Menu-bar icon
+
+status  idle
+ready   yes
+hotkey  bound to ⌃⌥D
+
+Next steps:
+- Menu-bar icon: rumps · start Aparté to show the icon
+
+--- 6/6 ce que le journal ne peut pas voir : à toi de regarder ---
+
+  a) Regarde en haut à droite de l'écran, dans la barre de menus.
+     Y a-t-il une petite icône Aparté (trois barres verticales) ?
+  Réponse (oui / non / autre) :   → icône visible : oui
+
+  b) Est-ce qu'une fenêtre est passée devant celle-ci pendant le démarrage,
+     ou est-ce que le Terminal est resté au premier plan ?
+  Réponse :   → vol de focus : Terminal mais une notification est apparue (notifications de Python)
+
+  c) Bascule l'apparence du Mac : menu Pomme → Réglages Système →
+     Apparence → Clair, puis Sombre. Regarde l'icône dans les deux.
+     Est-elle nette et lisible des deux côtés (noire sur clair,
+     blanche sur sombre), sans carré ni fond ?
+  Réponse :   → rendu clair/sombre : oui
+
+  d) Clique sur l'icône. Le menu s'ouvre-t-il ? Recopie la première ligne
+     (l'état) et la deuxième (le raccourci).
+  Réponse :   → menu : oui. Prêt a dicter. Raccourci avec les symboles weird + D (option + alt + d)
+
+=== étape 1 terminée — le serveur reste allumé pour l'étape 2 ===

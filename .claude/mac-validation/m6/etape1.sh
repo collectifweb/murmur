@@ -3,7 +3,7 @@
 # Points 1 et 2 de la checklist : apparition sans vol de focus, rendu template en
 # barre claire et en barre sombre.
 export PYTHONUNBUFFERED=1
-RELAY=http://IP-DU-POSTE-LINUX:8010
+RELAY=http://178.249.214.4:8010
 APP="$HOME/aparte"
 PY="$APP/.venv/bin/python"
 

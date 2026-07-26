@@ -8,6 +8,7 @@
 # à l'humain : il tuerait le groupe de processus, `tee` compris, et ce journal ne
 # partirait jamais.
 export PYTHONUNBUFFERED=1
+RELAY=http://IP-DU-POSTE-LINUX:8010
 APP="$HOME/aparte"
 PY="$APP/.venv/bin/python"
 cd "$APP" || exit 1
@@ -44,13 +45,24 @@ pgrep -fl "afplay|arecord" || echo "  ✓ aucun enregistreur ni lecteur de son e
 ls -la "${TMPDIR:-/tmp}"/aparte-* 2>/dev/null || echo "  ✓ aucun fichier de capture laissé derrière"
 
 echo ""
-echo "--- 4/6 relance, pour la seconde sortie ---"
+echo "--- 4/6 code corrigé, puis relance pour la seconde sortie ---"
+# La première validation a montré `doctor` annonçant « missing Menu-bar icon ·
+# start Aparté » alors que l'icône était là : il tourne dans un autre processus
+# que le serveur. Il interroge maintenant une route en lecture seule.
+if curl -fsS --connect-timeout 8 "$RELAY/src.tar.gz" -o src.tar.gz; then
+  tar xzf src.tar.gz -C src && echo "src/aparte mis à jour"
+else
+  echo "téléchargement impossible — on continue avec le code en place"
+fi
 nohup "$PY" -m aparte desktop --no-browser > desktop-ctrlc.log 2>&1 < /dev/null &
 SRV=$!
 sleep 6
 kill -0 "$SRV" 2>/dev/null && echo "serveur vivant (pid $SRV)" || { echo "SERVEUR MORT — étape interrompue"; exit 1; }
 echo -n "  l'icône est-elle bien revenue dans la barre de menus ? : "; read -r rep_retour
 echo "  → icône après relance : $rep_retour"
+echo "  --- doctor doit maintenant voir l'icône du serveur qui tourne ---"
+echo -n "  tray-state : "; curl -sS "http://127.0.0.1:8765/api/tray-state"; echo ""
+"$PY" -m aparte doctor 2>&1 | grep -i "menu-bar" || echo "  (aucune ligne Menu-bar ?!)"
 
 echo ""
 echo "--- 5/6 SIGINT sur ce PID précis (l'équivalent d'un Ctrl-C) ---"

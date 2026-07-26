@@ -15,8 +15,10 @@ L'humain double-clique l'icône du Bureau, attend « Journal envoyé », et on l
 `logs/step.log`. Ranger ensuite chaque journal dans `../journaux/` sous son nom
 d'étape, comme pour M8.
 
-**Adapter `RELAY=` en tête de `etape1.sh`** (l'IP du poste Linux), comme dans
-`amorce.sh`. Les autres étapes n'ont rien à télécharger.
+**Adapter `RELAY=` en tête de `etape1.sh` et de `etape4.sh`** (l'IP du poste
+Linux), comme dans `amorce.sh` — ce sont les deux seules qui téléchargent du code.
+L'étape 4 recharge `src.tar.gz` avant sa relance, pour vérifier au passage ce que
+l'étape 1 a fait corriger.
 
 ## Ce que chaque étape prouve
 

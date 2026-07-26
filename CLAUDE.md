@@ -417,6 +417,14 @@ phrases voisines.
   - **Le check `doctor` s'appelle `menubar`, pas `tray`** : `tray` est celui du
     panneau GTK Linux et porte déjà `check.tray.detail` (PyGObject), qui écraserait un
     détail macOS. `detail` dynamique donc **sans clé i18n**, jamais essentiel.
+  - **Le fait « l'icône existe » vit dans la mémoire du serveur**
+    (`macos_tray._BUILD_OUTCOME`, local au processus). Le `doctor` CLI tourne **à
+    côté** : il doit demander, par `GET /api/tray-state` (lecture seule, autorisée sur
+    Darwin), et retombe sur ce qui est installé si personne ne répond. Sans cette
+    question, il affichait « missing Menu-bar icon · start Aparté » **pendant que
+    l'icône était dans la barre** — vu à la première validation native de M6, et
+    exactement le défaut que M5 avait déjà corrigé pour le raccourci. Le panneau web
+    ne demande jamais : il est servi par le processus qui a construit l'icône.
   - **Ne pas écrire d'invariant sur le Ctrl-C sous rumps** avant de l'avoir observé
     sur un Mac — c'est exactement l'erreur corrigée en M8.
     (M6, `docs/plan-portage-macos-m6.md`.)

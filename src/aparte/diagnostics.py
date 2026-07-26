@@ -327,7 +327,13 @@ def _tray_check() -> Check:
     from .macos_tray import MISSING_DEPENDENCY, tray_build_outcome
 
     label = "Menu-bar icon"
+    # In-process (the resident server) the answer is right here; standing apart —
+    # the CLI — ask a running server over its read-only route. Skipping that step
+    # printed "start Aparté" under an icon that was on screen, which is the one
+    # thing this check must never do.
     outcome = tray_build_outcome()
+    if outcome is None:
+        outcome = _query_tray_state()
     if outcome == "ok":
         return Check("menubar", label, True, "System", detail="rumps")
     if outcome is not None:
@@ -337,6 +343,25 @@ def _tray_check() -> Check:
     if not _has_module("rumps"):
         return Check("menubar", label, False, "System", detail=MISSING_DEPENDENCY, fix=MISSING_DEPENDENCY)
     return Check("menubar", label, False, "System", detail="rumps · start Aparté to show the icon")
+
+
+def _query_tray_state() -> str | None:
+    """CLI ``doctor``: ask a running server whether it built its menu-bar icon.
+
+    Same shape as :func:`_query_hotkey_state` and for the same reason: the fact
+    lives in the server's memory, and a second process can only ask. ``None`` when
+    nothing answers (bounded, best-effort) — the check then falls back to what is
+    installed. Never reached in-process, where the outcome is a local variable."""
+    import json
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8765/api/tray-state", timeout=0.5) as response:
+            payload = json.loads(response.read())
+    except (OSError, ValueError):
+        return None
+    outcome = payload.get("outcome") if isinstance(payload, dict) else None
+    return outcome if isinstance(outcome, str) else None
 
 
 def _query_hotkey_state():
