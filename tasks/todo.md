@@ -1215,7 +1215,7 @@ Bénéfice de correction qui vient avec le bundle, découvert en M8 : aujourd'hu
 **toutes les autorisations macOS sont accordées à Terminal**, pas à Aparté. Un
 vrai bundle rend le modèle de permissions honnête et lisible.
 
-### M6 — l'icône de barre de menus macOS (écrit le 25/07, validation native à faire)
+### M6 — l'icône de barre de menus macOS (livrée et validée sur Mac le 25/07)
 
 **Plan consolidé : `docs/plan-portage-macos-m6.md`.** Consensus bilatéral en 3 rounds,
 archives `docs/archives/confront-codex-portage-macos-m6-2026-07-25-1956/`.
