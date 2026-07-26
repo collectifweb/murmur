@@ -137,11 +137,37 @@ class RecordingController:
         self._timer: threading.Timer | None = None
         self._worker: threading.Thread | None = None
         self._last_toggle: float | None = None
+        self._started_at: float | None = None
 
     @property
     def state(self) -> str:
         """The current state, for the tray/doctor. A plain string read is atomic."""
         return self._state
+
+    def recording_snapshot(self) -> tuple[str, float | None]:
+        """(state, seconds recorded so far) — read **without taking the lock**.
+
+        The tray polls this from the **main thread**, four times a second, and
+        ``_lock`` is held across ``ensure_microphone_access()`` — up to 30 s while the
+        macOS permission dialog is up. A locked read would freeze the whole menu bar
+        during that window, i.e. on the very first recording of a fresh install.
+
+        Coherence comes from write **order** instead: ``_started_at`` is set before
+        the state becomes RECORDING and cleared after it leaves. Attribute reads are
+        atomic under the GIL, so the worst case is a transition landing between the
+        two reads below — the caller then sees "recording, duration unknown" for one
+        250 ms tick.
+
+        The contract is deliberately small: atomic reads of immutable references. A
+        later lot that wants a richer surface (last error, truncated, overflowed) must
+        either publish an immutable object in a **single** assignment or reopen the
+        lock question.
+        """
+        state = self._state
+        started = self._started_at
+        if state != RECORDING or started is None:
+            return state, None
+        return state, max(0.0, self._clock() - started)
 
     # -- Trigger surface (called in-process by the M5 shortcut) -----------------
 
@@ -159,9 +185,21 @@ class RecordingController:
             else:  # PROCESSING — a dictation is already being transcribed
                 self._notify_busy()
 
-    def shutdown(self) -> None:
-        """Server closing: drop a live recording cleanly, no last-gasp transcription."""
-        with self._lock:
+    def shutdown(self, timeout: float | None = None) -> bool:
+        """Server closing: drop a live recording cleanly, no last-gasp transcription.
+
+        ``timeout`` bounds the wait for the lock and answers False when it never
+        came. The quit path passes a couple of seconds because ``_start_locked``
+        holds the lock across the microphone permission dialog (up to 30 s), and a
+        blocking shutdown there would freeze the menu bar for that whole time. Giving
+        up is safe on the way out: the process is ending and the OS reclaims the
+        audio device. The default stays blocking — that is the server's own path.
+        """
+        # Lock.acquire() has no "wait forever" timeout value: it takes -1, not None.
+        acquired = self._lock.acquire() if timeout is None else self._lock.acquire(timeout=timeout)
+        if not acquired:
+            return False
+        try:
             self._cancel_timer()
             if self._state == RECORDING:
                 if self._capture is not None:
@@ -170,6 +208,10 @@ class RecordingController:
                 self._stream = None
                 self._capture = None
                 self._state = IDLE
+                self._started_at = None
+        finally:
+            self._lock.release()
+        return True
 
     # -- Start ------------------------------------------------------------------
 
@@ -186,6 +228,7 @@ class RecordingController:
             self._stream = None
             self._capture = None
             self._state = ERROR
+            self._started_at = None
             self._notify_error(exc)
 
     def _start_locked(self) -> None:
@@ -233,6 +276,9 @@ class RecordingController:
             raise
         self._stream = stream
         self._capture = capture
+        # Before the state, always: the tray reads both without the lock, and only
+        # this order lets it trust a duration it read after seeing RECORDING.
+        self._started_at = self._clock()
         self._state = RECORDING
         self._arm_cap_timer(settings.max_recording_seconds)
 
@@ -247,6 +293,7 @@ class RecordingController:
         stream = self._stream
         self._stream = None
         self._state = PROCESSING
+        self._started_at = None  # after leaving RECORDING, never before
         # Never transcribe on the trigger thread: hand the capture to a worker. If
         # the worker can't even start (thread exhaustion), close the stream and go
         # to ERROR — never leave the state stuck on PROCESSING, which would refuse

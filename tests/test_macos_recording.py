@@ -367,5 +367,71 @@ class StopRobustnessTest(ControllerTestBase):
         self.assertTrue(self.sd.streams[0].closed)  # the started stream is not left open
 
 
+class SnapshotTest(ControllerTestBase):
+    """M6: what the menu-bar tray reads, four times a second, off the lock."""
+
+    def test_idle_has_no_duration(self):
+        self.assertEqual(self.controller.recording_snapshot(), (IDLE, None))
+
+    def test_recording_reports_seconds_since_the_press(self):
+        self.controller.toggle()
+        self.now += 7.5
+        self.assertEqual(self.controller.recording_snapshot(), (RECORDING, 7.5))
+
+    def test_the_duration_is_dropped_the_moment_recording_ends(self):
+        self.controller.toggle()
+        self.now += 3.0
+        self.controller.toggle()          # → processing
+        self.assertEqual(self.controller.recording_snapshot(), (PROCESSING, None))
+        self._run_worker()
+        self.assertEqual(self.controller.recording_snapshot(), (IDLE, None))
+
+    def test_a_failed_start_leaves_no_stale_duration_behind(self):
+        # The error state must not carry the previous recording's clock: the next
+        # press starts fresh, and the tray would otherwise show a running timer.
+        self.controller.toggle()
+        self.now += 4.0
+        self.controller.toggle()
+        self._run_worker()
+        self.sd.raw_error = RuntimeError("no device")
+        self.now += 1.0
+        self.controller.toggle()
+        self.assertEqual(self.controller.recording_snapshot(), (ERROR, None))
+
+    def test_the_snapshot_never_waits_for_the_controller_lock(self):
+        # The real freeze this guards: _start_locked holds the lock across the macOS
+        # microphone dialog, up to 30 s. The tray polls from the main thread — a
+        # locked read would freeze the menu bar for that whole window.
+        self.controller.toggle()
+        self.now += 2.0
+        acquired = self.controller._lock.acquire()
+        self.addCleanup(self.controller._lock.release)
+        self.assertTrue(acquired)
+        self.assertEqual(self.controller.recording_snapshot(), (RECORDING, 2.0))
+
+
+class BoundedShutdownTest(ControllerTestBase):
+    """M6: quitting must not hang the main thread behind a 30 s permission dialog."""
+
+    def test_shutdown_gives_up_when_the_lock_never_comes(self):
+        self.controller.toggle()
+        self.controller._lock.acquire()   # stand in for a start blocked on TCC
+        self.addCleanup(self.controller._lock.release)
+        self.assertFalse(self.controller.shutdown(timeout=0.05))
+        self.assertEqual(self.controller.state, RECORDING)  # untouched, not corrupted
+
+    def test_shutdown_still_discards_a_live_recording_when_it_gets_the_lock(self):
+        self.controller.toggle()
+        self.assertTrue(self.controller.shutdown(timeout=1.0))
+        self.assertEqual(self.controller.recording_snapshot(), (IDLE, None))
+        self.assertTrue(self.sd.streams[0].closed)
+
+    def test_the_default_stays_blocking(self):
+        # The server's own path is unchanged: no timeout, no give-up.
+        self.controller.toggle()
+        self.assertTrue(self.controller.shutdown())
+        self.assertEqual(self.controller.state, IDLE)
+
+
 if __name__ == "__main__":
     unittest.main()
