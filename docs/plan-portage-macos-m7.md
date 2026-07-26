@@ -390,3 +390,33 @@ ce qui ne laisse pas de trace dans un journal.
   processus responsable et l'attribution TCC repartirait à zéro.
 - **Le dépôt Homebrew officiel** — Aparté n'a pas la notoriété exigée ; un dépôt
   personnel ne coûte qu'un préfixe dans la commande d'installation.
+
+## Verdict de M7-0
+
+**À remplir depuis les journaux de `.claude/mac-validation/journaux/m7-0-etape*.log`.**
+Tant que ce tableau est vide, M7c, M7d et M7g ne s'écrivent pas — c'est le sens de la
+porte. Les trois lignes du haut décident du lot ; les deux du bas choisissent une
+implémentation parmi deux, et une seule doit rester.
+
+| Question | Ce qu'on a mesuré | Décision |
+|---|---|---|
+| La fenêtre du micro nomme-t-elle « Aparté » ? | | |
+| Celle de l'accessibilité ? | | |
+| L'entrée des Réglages Système porte-t-elle l'icône carmin ? | | |
+| Le bundle construit sur place reçoit-il la quarantaine ? (`xattr -lr`) | | |
+| `execv` ou processus enfant surveillé ? | | |
+| Signature ad-hoc ou certificat local (scénarios A/B/C) ? | | |
+
+**Si les trois premières lignes disent « Terminal » ou « Python ».** Le bundle ne sert
+pas ce pour quoi il existe. Ce qui reste vrai malgré tout, et qui est déjà livré : le
+modèle visible au premier lancement (M7f) et l'état Homebrew de la mise à jour (M7e) ne
+dépendent pas de l'attribution. Ce qui tombe : l'invariant « bundle jamais modifié », le
+`cdhash` de référence, le LaunchAgent par `/usr/bin/open`, et la justification du lanceur
+Mach-O. La distribution se repense alors à partir d'une formula **sans** `.app`, en
+assumant que les autorisations restent attribuées au terminal — c'est-à-dire en
+renonçant à corriger le défaut de fond, ou en payant les 99 USD par an.
+
+**Ce que « ça a marché » ne prouvera pas.** M8 a mesuré que `RegisterEventHotKey`
+accepte une combinaison déjà prise sans le moindre code d'erreur : macOS accepte
+souvent sans tenir. Le seul relevé qui compte ici est **ce qui est écrit dans la
+fenêtre**, pas un code de retour.
