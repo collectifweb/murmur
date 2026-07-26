@@ -36,6 +36,14 @@ DONE_MARKER = "__APARTE_UPDATED__"
 FETCH_TIMEOUT = 30  # git fetch reaches the network
 GIT_TIMEOUT = 10  # everything else is local
 
+# The release this process installed but is not running. Process-local on purpose:
+# it states a fact about *this* interpreter — the files on disk moved, the modules in
+# memory did not. Without it, `__version__` stays stale after an install that did not
+# restart, `check_update()` keeps seeing the same release as new, and a second click
+# would re-run git and pip for nothing. It says "this process installed X", never
+# "the running version is X".
+_INSTALLED_PENDING_RESTART: str | None = None
+
 
 def find_repo() -> Path | None:
     """The git checkout Aparté runs from, or None when it was installed as a copy."""
@@ -85,13 +93,23 @@ def check_update(fetch: bool = False) -> dict:
     """Describe what an update would do right now, without doing any of it.
 
     States: manual (not a checkout), no_upstream, offline, error, current,
-    available. `dirty` is reported alongside rather than as a state — the user
-    still wants to see that a release is waiting, even when the checkout is too
-    dirty to move to it.
+    available, restart_required. `dirty` is reported alongside rather than as a
+    state — the user still wants to see that a release is waiting, even when the
+    checkout is too dirty to move to it.
 
     Being ahead of the newest tag reads as `current`, and that is deliberate:
     unreleased commits are work in progress, not an update.
     """
+    if _INSTALLED_PENDING_RESTART is not None:
+        # Answered before git and before the network: this process already installed
+        # a release, and comparing tags against its stale `__version__` would offer
+        # the very same update again.
+        return {
+            "state": "restart_required",
+            "version": __version__,
+            "release": _INSTALLED_PENDING_RESTART,
+        }
+
     repo = find_repo()
     if repo is None:
         return {"state": "manual", "version": __version__}
@@ -162,6 +180,12 @@ def _installed_extras() -> list[str]:
         extras.append("recording")
     if _has_module("nvidia.cublas"):
         extras.append("cuda")
+    if _has_module("rumps") or _has_module("AppKit"):
+        # The macOS extra, detected the same way as the others: by what is actually
+        # installed, never by `sys.platform`. Dropping it would reinstall a Mac
+        # install without PyObjC or the menu-bar icon the day a release needs a new
+        # one — and the tray is the only way to update on macOS.
+        extras.append("macos")
     return extras
 
 
@@ -194,6 +218,10 @@ def apply_update() -> Iterator[str]:
     a stray request and a `pip install`.
     """
     status = check_update()
+    if status["state"] == "restart_required":
+        # Nothing left to install, and the states below assume a repo and a release.
+        yield f"Aparté {status.get('release', '')} is installed — restart to run it."
+        return
     if status["state"] == "manual":
         yield "Aparté does not run from a git checkout — update it manually."
         return
@@ -228,6 +256,8 @@ def apply_update() -> Iterator[str]:
         yield "Stopped: pip install failed. The code was pulled but not installed."
         return
 
+    global _INSTALLED_PENDING_RESTART
+    _INSTALLED_PENDING_RESTART = release
     yield DONE_MARKER
 
 

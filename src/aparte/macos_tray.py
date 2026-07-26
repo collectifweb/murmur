@@ -67,6 +67,22 @@ LABELS = {
         "copy": "Copier la dernière dictée",
         "settings": "Réglages",
         "quit": "Quitter",
+        "update_check": "Rechercher une mise à jour…",
+        "update_busy": "Vérification…",
+        "update_install": "Installer la version {version}",
+        "update_installing": "Installation…",
+        "update_done": "Mise à jour installée — relance Aparté",
+        "update_notice": "Mise à jour",
+        "update_current": "Aparté {version} est à jour.",
+        "update_available": "Version {version} disponible. Reclique pour l'installer.",
+        "update_dirty": "Le dossier a des modifications non validées.",
+        "update_manual": "Aparté ne tourne pas depuis un dépôt git.",
+        "update_no_upstream": "La branche ne suit aucune branche distante.",
+        "update_offline": "Impossible de joindre le dépôt distant.",
+        "update_error": "Lecture du dépôt impossible.",
+        "update_installed": "Mise à jour installée — quitte et relance Aparté.",
+        "update_failed": "Mise à jour interrompue : {detail}",
+        "update_dictating": "Une dictée est en cours — réessaie après.",
     },
     "en": {
         "idle": "Ready to dictate",
@@ -80,8 +96,30 @@ LABELS = {
         "copy": "Copy the last dictation",
         "settings": "Settings",
         "quit": "Quit",
+        "update_check": "Check for updates…",
+        "update_busy": "Checking…",
+        "update_install": "Install version {version}",
+        "update_installing": "Installing…",
+        "update_done": "Update installed — relaunch Aparté",
+        "update_notice": "Update",
+        "update_current": "Aparté {version} is up to date.",
+        "update_available": "Version {version} available. Click again to install it.",
+        "update_dirty": "The checkout has uncommitted changes.",
+        "update_manual": "Aparté does not run from a git checkout.",
+        "update_no_upstream": "The branch tracks no remote branch.",
+        "update_offline": "Could not reach the remote.",
+        "update_error": "Cannot read the checkout.",
+        "update_installed": "Update installed — quit and relaunch Aparté.",
+        "update_failed": "Update stopped: {detail}",
+        "update_dictating": "A dictation is in progress — try again after.",
     },
 }
+
+# What the update menu item is waiting for. Two clicks, never one: an update
+# reinstalls packages, and the web panel asks the same way (check, then apply).
+UPDATE_CHECK = "check"      # first click: look for a release
+UPDATE_INSTALL = "install"  # second click: install the one that was found
+UPDATE_DONE = "done"        # installed; nothing left to do but relaunch
 
 
 def labels() -> dict[str, str]:
@@ -148,6 +186,58 @@ def tray_view(snapshot: tuple[str, float | None], hotkey_state, texts: dict[str,
         title = ""
     status = texts[state if state in (IDLE, RECORDING, PROCESSING, ERROR) else IDLE]
     return TrayView(icon=icon, title=title, status=status, shortcut=_shortcut_line(hotkey_state, texts))
+
+
+@dataclass(frozen=True)
+class UpdateDecision:
+    """What the update item becomes, and what the user is told, after a step."""
+
+    mode: str
+    title: str
+    message: str
+
+
+def _release_name(release: str) -> str:
+    """`v1.2.0` → `1.2.0`. The tag is git's spelling, not the user's."""
+    return release[1:] if release.startswith("v") else release
+
+
+def update_after_check(result: dict, texts: dict[str, str]) -> UpdateDecision:
+    """Read `check_update()` and decide what the menu shows next.
+
+    Every state gets a sentence — including the four that mean "no update is
+    possible here" (no checkout, no upstream, offline, unreadable). A menu item that
+    silently does nothing is the failure this whole lot is about.
+    """
+    state = str(result.get("state") or "error")
+    if state == "restart_required":
+        return UpdateDecision(UPDATE_DONE, texts["update_done"], texts["update_installed"])
+    if state == "available" and not result.get("dirty"):
+        version = _release_name(str(result.get("release") or ""))
+        return UpdateDecision(
+            UPDATE_INSTALL,
+            texts["update_install"].format(version=version),
+            texts["update_available"].format(version=version),
+        )
+    if state == "available":  # a release is waiting, but the checkout cannot move
+        return UpdateDecision(UPDATE_CHECK, texts["update_check"], texts["update_dirty"])
+    if state == "current":
+        message = texts["update_current"].format(version=result.get("version") or "")
+        return UpdateDecision(UPDATE_CHECK, texts["update_check"], message)
+    return UpdateDecision(
+        UPDATE_CHECK, texts["update_check"], texts.get(f"update_{state}", texts["update_error"])
+    )
+
+
+def update_after_apply(lines, texts: dict[str, str], done_marker: str) -> UpdateDecision:
+    """Read the install log and decide. Success is the marker, never "no error"."""
+    lines = list(lines)
+    if done_marker in lines:
+        return UpdateDecision(UPDATE_DONE, texts["update_done"], texts["update_installed"])
+    detail = next((line for line in reversed(lines) if line.strip()), "")
+    return UpdateDecision(
+        UPDATE_CHECK, texts["update_check"], texts["update_failed"].format(detail=detail)
+    )
 
 
 # -- The rumps binding (native, macOS only) ---------------------------------------
@@ -250,6 +340,11 @@ class MacTray:
         )
         self._status_item = rumps.MenuItem("")
         self._shortcut_item = rumps.MenuItem("")
+        self._update_item = rumps.MenuItem(self._texts["update_check"], callback=self._update)
+        self._update_mode = UPDATE_CHECK
+        self._update_busy = False
+        self._update_worker: threading.Thread | None = None
+        self._pending_update: UpdateDecision | None = None
         # No callback → macOS greys the item out. These two lines are read, not clicked.
         self._app.menu = [
             self._status_item,
@@ -258,6 +353,8 @@ class MacTray:
             rumps.MenuItem(self._texts["open"], callback=self._open),
             rumps.MenuItem(self._texts["copy"], callback=self._copy_last),
             rumps.MenuItem(self._texts["settings"], callback=self._open_settings),
+            rumps.separator,
+            self._update_item,
             rumps.separator,
             rumps.MenuItem(self._texts["quit"], callback=self._quit),
         ]
@@ -344,6 +441,12 @@ class MacTray:
 
     def refresh(self) -> None:
         """Read one snapshot and push what changed. Called four times a second."""
+        pending, self._pending_update = self._pending_update, None
+        if pending is not None:
+            # The update worker leaves its result here rather than touching the menu
+            # itself: AppKit is a main-thread affair, and this tick is the main thread.
+            self._update_mode = pending.mode
+            self._update_item.title = pending.title
         view = tray_view(self._controller.recording_snapshot(), self._hotkey_state(), self._texts)
         previous, self._view = self._view, view
         if previous is None or view.icon != previous.icon:
@@ -374,3 +477,52 @@ class MacTray:
         # Teardown first, terminate second: terminate_ never comes back.
         self._quit_hook()
         self._rumps.quit_application()
+
+    # -- Updating ---------------------------------------------------------------
+
+    def _update(self, _=None) -> None:
+        """Menu click, on the main thread. Decide, then hand the work to a thread.
+
+        On macOS this menu is the **only** way to update: `/api/update/apply` is 404
+        on Darwin by invariant, since a route that runs git and pip over HTTP would be
+        a privilege proxy.
+        """
+        if self._update_busy or self._update_mode == UPDATE_DONE:
+            return
+        state, _elapsed = self._controller.recording_snapshot()
+        if state != IDLE:
+            # A dictation is worth more than an update, and an update has no urgency.
+            self._notify_update(self._texts["update_dictating"])
+            return
+        self._update_busy = True
+        installing = self._update_mode == UPDATE_INSTALL
+        self._update_item.title = self._texts["update_installing" if installing else "update_busy"]
+        self._update_worker = threading.Thread(
+            target=self._run_update, args=(installing,), name="aparte-update", daemon=True
+        )
+        self._update_worker.start()
+
+    def _run_update(self, installing: bool) -> None:
+        # Off the main thread: a fetch reaches the network and an install runs git and
+        # pip. The result is left for the next tick to draw; only the notification
+        # goes out from here, since it shells out and touches no AppKit.
+        from .update import DONE_MARKER, apply_update, check_update
+
+        try:
+            if installing:
+                decision = update_after_apply(apply_update(), self._texts, DONE_MARKER)
+            else:
+                # Reaches the network only because the user asked: opening the menu
+                # never phones home on its own.
+                decision = update_after_check(check_update(fetch=True), self._texts)
+        except Exception as exc:
+            decision = UpdateDecision(UPDATE_CHECK, self._texts["update_check"], str(exc))
+        self._pending_update = decision
+        self._update_busy = False
+        self._notify_update(decision.message)
+
+    def _notify_update(self, message: str) -> None:
+        try:
+            notify(self._texts["update_notice"], message)
+        except Exception:
+            pass

@@ -12,6 +12,7 @@ import zlib
 from unittest import mock
 
 from aparte import macos_tray
+from aparte import update as update_module
 from aparte.macos_hotkey import HotkeyState
 from aparte.macos_recording import ERROR, IDLE, PROCESSING, RECORDING
 from aparte.macos_tray import ICON_IDLE, ICON_RECORDING, format_elapsed, labels, tray_view
@@ -348,6 +349,129 @@ class BuildTrayTest(unittest.TestCase):
             self.assertIsNone(self._build())
         self.notify.assert_called_once()
         self.assertEqual(self.notify.call_args.kwargs.get("urgency"), "critical")
+
+
+FR = macos_tray.LABELS["fr"]
+
+
+class UpdateDecisionTest(unittest.TestCase):
+    """Every state of check_update gets a sentence. A menu item that silently does
+    nothing is the failure this whole lot is about."""
+
+    def test_a_release_is_offered_then_installed_on_the_second_click(self):
+        decision = macos_tray.update_after_check({"state": "available", "release": "v1.2.0"}, FR)
+        self.assertEqual(decision.mode, macos_tray.UPDATE_INSTALL)
+        self.assertEqual(decision.title, "Installer la version 1.2.0")   # the tag's "v" is git's
+        self.assertIn("Reclique", decision.message)
+
+    def test_up_to_date_says_so_and_stays_ready_to_check_again(self):
+        decision = macos_tray.update_after_check({"state": "current", "version": "1.1.1"}, FR)
+        self.assertEqual(decision.mode, macos_tray.UPDATE_CHECK)
+        self.assertEqual(decision.message, "Aparté 1.1.1 est à jour.")
+
+    def test_a_dirty_checkout_is_named_rather_than_offered(self):
+        # A release is waiting but the checkout cannot move to it; offering an
+        # install that would refuse itself is worse than saying why.
+        decision = macos_tray.update_after_check(
+            {"state": "available", "release": "v1.2.0", "dirty": True}, FR
+        )
+        self.assertEqual(decision.mode, macos_tray.UPDATE_CHECK)
+        self.assertEqual(decision.message, "Le dossier a des modifications non validées.")
+
+    def test_every_impossible_state_gets_its_own_reason(self):
+        for state, expected in (
+            ("manual", "Aparté ne tourne pas depuis un dépôt git."),
+            ("no_upstream", "La branche ne suit aucune branche distante."),
+            ("offline", "Impossible de joindre le dépôt distant."),
+            ("error", "Lecture du dépôt impossible."),
+        ):
+            with self.subTest(state=state):
+                self.assertEqual(macos_tray.update_after_check({"state": state}, FR).message, expected)
+
+    def test_an_unknown_state_still_says_something(self):
+        self.assertTrue(macos_tray.update_after_check({"state": "martian"}, FR).message)
+
+    def test_an_installed_release_freezes_the_item_on_relaunch(self):
+        decision = macos_tray.update_after_check({"state": "restart_required", "release": "v1.2.0"}, FR)
+        self.assertEqual(decision.mode, macos_tray.UPDATE_DONE)
+        self.assertEqual(decision.title, "Mise à jour installée — relance Aparté")
+
+    def test_success_is_the_marker_never_the_absence_of_an_error(self):
+        decision = macos_tray.update_after_apply(["ok", "DONE"], FR, "DONE")
+        self.assertEqual(decision.mode, macos_tray.UPDATE_DONE)
+        self.assertIn("relance", decision.message)
+
+    def test_a_failed_install_reports_the_last_line_of_the_log(self):
+        decision = macos_tray.update_after_apply(["$ pip install", "boom", ""], FR, "DONE")
+        self.assertEqual(decision.mode, macos_tray.UPDATE_CHECK)
+        self.assertEqual(decision.message, "Mise à jour interrompue : boom")
+
+    def test_english_carries_the_same_flow(self):
+        english = macos_tray.LABELS["en"]
+        decision = macos_tray.update_after_check({"state": "available", "release": "v1.2.0"}, english)
+        self.assertEqual(decision.title, "Install version 1.2.0")
+
+
+class UpdateClickTest(TrayBindingTest):
+    """The two-step flow, on the real menu item, with a fake rumps."""
+
+    def setUp(self):
+        super().setUp()
+        self.notify = mock.patch.object(macos_tray, "notify").start()
+        self.rumps = FakeRumps()
+
+    def _tray(self, state=IDLE):
+        return build(self.rumps, FakeController([(state, None)]))
+
+    def _click(self, tray):
+        tray._update()
+        if tray._update_worker is not None:
+            tray._update_worker.join(2.0)
+        tray.refresh()          # the main thread draws the result, not the worker
+
+    def test_a_dictation_in_progress_refuses_the_update(self):
+        # An update reinstalls packages; a recording is worth more, and an update
+        # has no urgency.
+        tray = self._tray(state=RECORDING)
+        self._click(tray)
+        self.assertIsNone(tray._update_worker)
+        self.assertEqual(self.notify.call_args.args[1], "Une dictée est en cours — réessaie après.")
+
+    def test_first_click_checks_second_click_installs(self):
+        tray = self._tray()
+        with mock.patch("aparte.update.check_update", return_value={"state": "available", "release": "v1.2.0"}) as check:
+            self._click(tray)
+        check.assert_called_once_with(fetch=True)   # network only because it was asked
+        self.assertEqual(tray._update_item.title, "Installer la version 1.2.0")
+
+        with mock.patch("aparte.update.apply_update", return_value=["ok", update_module.DONE_MARKER]) as apply_:
+            self._click(tray)
+        apply_.assert_called_once()
+        self.assertEqual(tray._update_mode, macos_tray.UPDATE_DONE)
+        self.assertEqual(tray._update_item.title, "Mise à jour installée — relance Aparté")
+
+    def test_once_installed_the_item_stops_doing_anything(self):
+        # Nothing left to install, and the running process still holds the old code.
+        tray = self._tray()
+        tray._update_mode = macos_tray.UPDATE_DONE
+        with mock.patch("aparte.update.check_update") as check:
+            self._click(tray)
+        check.assert_not_called()
+
+    def test_a_second_click_while_it_works_is_ignored(self):
+        tray = self._tray()
+        tray._update_busy = True
+        with mock.patch("aparte.update.check_update") as check:
+            tray._update()
+        check.assert_not_called()
+
+    def test_a_crash_in_the_worker_leaves_the_item_usable(self):
+        tray = self._tray()
+        with mock.patch("aparte.update.check_update", side_effect=RuntimeError("git exploded")):
+            self._click(tray)
+        self.assertEqual(tray._update_mode, macos_tray.UPDATE_CHECK)
+        self.assertFalse(tray._update_busy)
+        self.assertIn("git exploded", self.notify.call_args.args[1])
 
 
 def _png_rgba(path):

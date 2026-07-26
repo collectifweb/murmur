@@ -684,22 +684,29 @@ function renderUpdate(data) {
   const fresh = data.state === "current";
   // Une version, pas un nombre de commits : ce qui n'a pas été publié n'est pas
   // une mise à jour.
+  const release = (data.release || "").replace(/^v/, "");
   const label = data.state !== "available"
-    ? t("update." + data.state, { branch: data.branch || "" })
-    : t("update.available", { release: (data.release || "").replace(/^v/, "") });
+    ? t("update." + data.state, { branch: data.branch || "", release, version: data.version || "" })
+    : t("update.available", { release });
 
   let html = `<div class="diag-item">
       <span class="diag-icon ${fresh ? "ok" : "warn"}">${fresh ? "✓" : "!"}</span>
       <div class="diag-main"><div class="diag-label">${escapeHtml(label)}</div>`;
-  if (data.version) html += `<div class="diag-detail">${escapeHtml(t("update.version", { version: data.version }))}</div>`;
+  // « Version installée » mentirait après une installation sans relance : la
+  // phrase d'état porte déjà les deux versions, celle du disque et celle qui tourne.
+  if (data.version && data.state !== "restart_required") html += `<div class="diag-detail">${escapeHtml(t("update.version", { version: data.version }))}</div>`;
   if (data.detail) html += `<div class="diag-detail">${escapeHtml(data.detail)}</div>`;
   if (data.commits && data.commits.length) {
     html += `<ul class="update-commits">${data.commits.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>`;
   }
   if (data.dirty) html += `<div class="diag-detail">${escapeHtml(t("update.dirty"))}</div>`;
+  const ready = data.state === "available" && !data.dirty;
+  // can_apply absent = ancien serveur, donc Linux : le bouton reste.
+  const canApply = data.can_apply !== false;
+  if (ready && !canApply) html += `<div class="diag-detail">${escapeHtml(t("update.use_tray"))}</div>`;
   html += `<div class="update-actions">
         <button class="btn ghost" id="update-check">${escapeHtml(t("update.check"))}</button>
-        ${data.state === "available" && !data.dirty ? `<button class="btn primary" id="update-apply">${escapeHtml(t("update.apply"))}</button>` : ""}
+        ${ready && canApply ? `<button class="btn primary" id="update-apply">${escapeHtml(t("update.apply"))}</button>` : ""}
       </div>
       <div class="diag-detail" id="update-note">${escapeHtml(t("update.local"))}</div>
       <pre class="update-log" id="update-log" hidden></pre>

@@ -455,6 +455,34 @@ class DarwinRouteGuardTest(unittest.TestCase):
             paste.assert_called_once()
 
 
+class UpdateCheckRouteTest(unittest.TestCase):
+    """The panel must not offer a button the server refuses. /api/update/apply is
+    404 on Darwin (the guard above), so the check says so and the browser points at
+    the menu-bar icon instead — where the update actually runs, in-process."""
+
+    def _check(self, macos):
+        with mock.patch.object(desktop, "is_macos", return_value=macos):
+            with mock.patch.object(desktop, "check_update", return_value={"state": "available"}):
+                res = make_request("GET", "/api/update/check")
+        self.assertEqual(res["status"], int(HTTPStatus.OK))
+        return json.loads(res["body"])
+
+    def test_the_apply_button_is_offered_off_darwin(self):
+        self.assertTrue(self._check(False)["can_apply"])
+
+    def test_the_apply_button_is_withheld_on_darwin(self):
+        self.assertFalse(self._check(True)["can_apply"])
+
+    def test_both_languages_carry_the_strings_that_replace_it(self):
+        # A string written in one language only would be announced in English to a
+        # French screen reader — and these two are macOS-only, so nobody here sees them.
+        i18n = (Path(desktop.__file__).resolve().parent / "assets" / "i18n.js").read_text(
+            encoding="utf-8"
+        )
+        for key in ('"update.restart_required"', '"update.use_tray"'):
+            self.assertEqual(i18n.count(key), 2, key)
+
+
 class RecordingStateRouteTest(unittest.TestCase):
     """On macOS the resident server records in memory (M4). Its state is observable
     through a read-only GET — allowed on Darwin — for the tray and doctor. Off

@@ -47,7 +47,17 @@ def make_checkout(root: Path, release: str | None = "v1.0.1") -> Path:
     return clone
 
 
-class VersionTagTest(unittest.TestCase):
+class UpdateTestCase(unittest.TestCase):
+    """Base for every test here: `apply_update()` arms a module-level flag on
+    success, and a leaked one turns every later `check_update()` into
+    `restart_required`. Reset on both sides, never once."""
+
+    def setUp(self):
+        update._INSTALLED_PENDING_RESTART = None
+        self.addCleanup(setattr, update, "_INSTALLED_PENDING_RESTART", None)
+
+
+class VersionTagTest(UpdateTestCase):
     def test_versions_compare_as_numbers_not_as_text(self):
         self.assertGreater(update._version_key("v1.10.0"), update._version_key("v1.9.0"))
 
@@ -56,7 +66,7 @@ class VersionTagTest(unittest.TestCase):
             self.assertIsNone(update._version_key(tag), tag)
 
 
-class CheckUpdateTest(unittest.TestCase):
+class CheckUpdateTest(UpdateTestCase):
     def test_reads_the_real_tracking_branch_not_origin(self):
         with tempfile.TemporaryDirectory() as directory:
             clone = make_checkout(Path(directory))
@@ -125,7 +135,7 @@ class CheckUpdateTest(unittest.TestCase):
             self.assertEqual(update.check_update(fetch=True)["state"], "manual")
 
 
-class ApplyUpdateTest(unittest.TestCase):
+class ApplyUpdateTest(UpdateTestCase):
     def test_refuses_a_checkout_with_local_changes(self):
         with tempfile.TemporaryDirectory() as directory:
             clone = make_checkout(Path(directory))
@@ -215,7 +225,7 @@ class ApplyUpdateTest(unittest.TestCase):
         self.assertNotIn(update.DONE_MARKER, log)
 
 
-class RestartTest(unittest.TestCase):
+class RestartTest(UpdateTestCase):
     def _relaunch_command(self, argv):
         with mock.patch.object(update.os, "execv") as execv:
             with mock.patch.object(update.sys, "argv", argv):
@@ -234,6 +244,74 @@ class RestartTest(unittest.TestCase):
             self._relaunch_command(["/src/aparte/__main__.py", "desktop", "--no-browser"]),
             ["-m", "aparte", "desktop", "--no-browser"],
         )
+
+
+class RestartRequiredTest(UpdateTestCase):
+    """M6: on macOS the tray installs but does not relaunch, so this process keeps
+    running the old code with a stale `__version__`. Without this state it would go
+    on offering — and re-running — the update it just installed."""
+
+    def _install(self, exit_code=0):
+        def fake_stream(command, cwd):
+            yield "ok"
+            return exit_code
+
+        with tempfile.TemporaryDirectory() as directory:
+            clone = make_checkout(Path(directory))
+            git(clone, "fetch", "--tags", "Murmur")
+            with mock.patch.object(update, "find_repo", return_value=clone), \
+                 mock.patch.object(update, "__version__", INSTALLED), \
+                 mock.patch.object(update, "_stream", fake_stream), \
+                 mock.patch.object(update, "_installed_extras", return_value=[]):
+                return list(update.apply_update())
+
+    def test_a_successful_install_arms_the_state_with_its_release(self):
+        lines = self._install()
+        self.assertIn(update.DONE_MARKER, lines)
+        self.assertEqual(update._INSTALLED_PENDING_RESTART, "v1.0.1")
+
+    def test_the_check_answers_without_touching_git_or_the_network(self):
+        update._INSTALLED_PENDING_RESTART = "v1.2.0"
+        with mock.patch.object(update, "_git") as git_call:
+            status = update.check_update(fetch=True)
+        git_call.assert_not_called()
+        self.assertEqual(status["state"], "restart_required")
+        self.assertEqual(status["release"], "v1.2.0")
+        # Honest about what it means: this process installed 1.2.0, it still runs the
+        # old code, and `version` keeps saying so.
+        self.assertEqual(status["version"], update.__version__)
+
+    def test_applying_again_refuses_instead_of_reinstalling(self):
+        update._INSTALLED_PENDING_RESTART = "v1.2.0"
+        with mock.patch.object(update, "_stream") as stream:
+            lines = list(update.apply_update())
+        stream.assert_not_called()
+        self.assertTrue(any("restart" in line for line in lines), lines)
+
+    def test_a_failed_install_leaves_the_state_alone(self):
+        # Only the done marker arms it: a merge or a pip that stopped halfway must
+        # keep offering the update, not pretend it landed.
+        lines = self._install(exit_code=1)
+        self.assertNotIn(update.DONE_MARKER, lines)
+        self.assertIsNone(update._INSTALLED_PENDING_RESTART)
+
+
+class InstalledExtrasTest(UpdateTestCase):
+    """Reinstalling must preserve the extras the user actually has — never add the
+    macOS ones because the machine happens to be a Mac."""
+
+    def _extras(self, present):
+        with mock.patch.object(update, "_has_module", side_effect=lambda name: name in present):
+            return update._installed_extras()
+
+    def test_a_mac_install_keeps_its_macos_extra(self):
+        # Dropping it would reinstall a Mac without PyObjC or the menu-bar icon the
+        # day a release needs a new one — and on macOS the tray is the only updater.
+        self.assertIn("macos", self._extras({"rumps", "faster_whisper"}))
+        self.assertIn("macos", self._extras({"AppKit"}))
+
+    def test_a_linux_install_never_grows_one(self):
+        self.assertEqual(self._extras({"faster_whisper", "sounddevice"}), ["whisper", "recording"])
 
 
 if __name__ == "__main__":

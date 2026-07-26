@@ -293,7 +293,14 @@ def handler_factory(
                 # Only reach the network when the user asks for it: opening the
                 # panel must not phone home on its own.
                 fetch = (parse_qs(urlsplit(self.path).query).get("fetch") or [""])[0] == "1"
-                self._send_json(check_update(fetch=fetch))
+                payload = check_update(fetch=fetch)
+                # Où la route d'application est refusée (invariant Darwin), le
+                # panneau ne doit pas proposer un bouton qui rendra 404 : sur Mac
+                # la mise à jour part de l'icône de barre de menus.
+                payload["can_apply"] = not (
+                    is_macos() and "/api/update/apply" in _DARWIN_DISABLED_POST_ROUTES
+                )
+                self._send_json(payload)
                 return
             if route == "/api/recording-state":
                 # Read-only, so it stays allowed on Darwin: the tray (M6) and
