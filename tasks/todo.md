@@ -1215,6 +1215,84 @@ Bénéfice de correction qui vient avec le bundle, découvert en M8 : aujourd'hu
 **toutes les autorisations macOS sont accordées à Terminal**, pas à Aparté. Un
 vrai bundle rend le modèle de permissions honnête et lisible.
 
+### M6 — l'icône de barre de menus macOS (planifié + validé `/confront-codex` le 25/07)
+
+**Plan consolidé : `docs/plan-portage-macos-m6.md`.** Consensus bilatéral en 3 rounds,
+archives `docs/archives/confront-codex-portage-macos-m6-2026-07-25-1956/`.
+
+**Pourquoi maintenant.** C'est M8 qui l'a promue : sur Mac, rien n'indique que le
+micro est ouvert — pas d'icône, pas de fenêtre, une application « accessory »
+n'affiche rien. Le testeur a cru que son appui n'avait rien fait, a réappuyé, et a
+arrêté l'enregistrement que le premier venait de lancer, **alors que le code était
+correct** (§ M8, défaut G). Le bip activé par défaut est un pansement de 90 ms
+qu'on manque en parlant. L'icône est le remède.
+
+**Tranché avec Alexandre avant d'écrire le plan (25/07).**
+- *Le menu observe, il ne déclenche pas.* Pas d'article « Démarrer la dictée » en
+  M6, même si l'invariant Darwin l'autoriserait (le tray est un déclencheur natif
+  légitime, contrairement à une route HTTP). Le raccourci reste le chemin.
+- *Icônes monochromes « template ».* macOS teinte lui-même : noir sur barre claire,
+  blanc sur barre sombre. La barre de menus est **translucide sur le fond d'écran**,
+  donc aucune couleur fixe ne peut être vérifiée par calcul contre son fond — la
+  règle du calcul de `DESIGN.md` est intenable là, et le carmin y serait une
+  couleur posée à l'aveugle (mesuré : 5,4:1 sur barre claire, **2,7:1** sur barre
+  sombre, et rien ne dit ce qu'il y a derrière). La règle du projecteur garde son
+  aplat carmin là où il est calculable : le bouton de l'interface.
+- *Minuteur pendant l'enregistrement.* « 0:07 » à côté de l'icône, seulement pendant
+  la capture. Des chiffres qui défilent s'attrapent du coin de l'œil bien mieux
+  qu'un changement de forme — c'est exactement ce qui a manqué en M8.
+
+**Les deux points durs.** Détail complet dans le plan consolidé.
+
+1. **Une seule boucle AppKit.** `rumps.App.run()` appelle `AppHelper.runEventLoop()` —
+   littéralement ce que fait déjà `_appkit_run_loop`. Donc **rumps devient la boucle**,
+   et le point d'injection qui existe depuis M5b (`run_loop`) est la jointure.
+2. **« Quitter » ne revient jamais.** `rumps.quit_application()` appelle
+   `NSApplication.terminate_`, qui sort du processus **sans** revenir de `run()` : le
+   `finally` ordonné ne s'exécuterait pas. Même famille que le piège Ctrl-C de M8,
+   mais celui-ci est la sortie *normale* — il faut corriger, pas documenter.
+
+**Ce que la contre-expertise a changé** (Codex est allé lire le source de `rumps`, ce
+qui est impossible ici : pas de PyObjC sous Linux).
+
+- **`quit_button=None` est obligatoire** : `rumps.App` ajoute sinon son propre article
+  Quit câblé sur `quit_application()`, c'est-à-dire un chemin visible qui **contourne
+  tout le démontage**.
+- **rumps réinstalle SIGINT après nous** (`installMachInterrupt()`), donc on n'y touche
+  pas sur ce chemin. Conséquence probable — à **vérifier**, pas à écrire comme
+  invariant : sous rumps, Ctrl-C rendrait la main et le démontage aurait lieu.
+- **La signature devient `run_loop(on_ready, on_quit=None)`** : obligatoire, elle
+  casserait `run_hotkey_diagnostic()`, l'outil de validation native M8.
+- **Le gel au démontage n'est pas de 5 s mais d'environ 35 s** : `shutdown()` attend un
+  verrou que `ensure_microphone_access()` peut tenir 30 s. D'où
+  `shutdown(timeout=None)` borné, et chaque étape du démontage en best-effort.
+- **La mise à jour installe sans relancer** (`os.execv` relancerait l'interpréteur, pas
+  l'application responsable vue par TCC — question M7), et `update.py` gagne un état
+  `restart_required` local au processus : sans lui, `__version__` reste périmé et la
+  même mise à jour se reproposerait indéfiniment.
+- **Deux positions tenues et acceptées par Codex** : l'instantané d'état se lit **sans
+  verrou** (le prendre depuis le fil principal gèlerait la barre pendant la fenêtre
+  TCC) ; le sondage reste **fixe à 0,25 s** (ralentir au repos rallongerait la latence
+  « appui → icône », c'est-à-dire le défaut même à corriger).
+
+**Découpage (chaque lot avec ses tests et son commit).**
+
+- [ ] **M6a — socle testable, zéro natif.** `macos_tray.py` : libellés fr/en, vue pure,
+      `format_elapsed`. `RecordingController` : `_started_at` ordonné,
+      `recording_snapshot()` sans verrou, `shutdown(timeout=None)` borné.
+- [ ] **M6b — cohabitation des boucles.** `MacTray`, `build_tray()`, `serve_macos`
+      (`url=`, fabrique injectable), démontage sous `RLock` best-effort, second filet
+      `rumps.events.before_quit` si la version l'expose.
+- [ ] **M6c — les deux icônes.** SVG monochromes + PNG 40 px commités, régénération
+      documentée, test « aucun pixel coloré ». `/impeccable`.
+- [ ] **M6d — « Mettre à jour ».** Deux temps, refus hors `idle`, installation sans
+      relance, `restart_required`, `_installed_extras()` élargi, panneau web cohérent.
+- [ ] **M6e — doc + check `doctor` `tray`.** `CLAUDE.md`, `DESIGN.md`, `CHANGELOG.md`,
+      ce fichier. Retrait de `quickmachotkey` de l'extra `macos` (dette M8).
+
+**Ce qui restera à prouver sur un vrai Mac** : checklist en fin de
+`docs/plan-portage-macos-m6.md` (outillage prêt, `.claude/mac-validation/README.md`).
+
 ### Windows, pour mémoire (étudié le 23/07, non planifié)
 
 Réécriture partielle, ~15–21 jours, ~le double de Mac. Aucun modèle Unix de
