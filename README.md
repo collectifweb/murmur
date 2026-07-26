@@ -191,11 +191,15 @@ On that page you can record (the **browser** captures the microphone via
 `getUserMedia` and sends the audio to the local server), transcribe locally,
 polish locally, and **copy** the result from the browser clipboard with a click.
 
-What does **not** work on macOS yet — and it is the part that *is* the product —
-is inserting the dictation straight into the app you're using, without going back
-to the page. Also missing: the global keyboard shortcut, a native launcher and
-login autostart, the menu-bar tray, and native notifications. These are being
-built lot by lot; see [docs/plan-portage-macos.md](docs/plan-portage-macos.md).
+The part that *is* the product now works there too: inserting the dictation
+straight into the app you're using, a global keyboard shortcut, the menu-bar icon
+that shows the microphone is open, native notifications and the start/stop tone.
+The icon needs the `macos` extra (`pip install -e ".[macos]"`); without it Aparté
+runs, silently, with nothing in the menu bar.
+
+What is still missing is the **install itself**: there is no packaged application
+yet, so Aparté runs from a checkout and does not start at login. That, and every
+lot before it, is in [docs/plan-portage-macos.md](docs/plan-portage-macos.md).
 
 One nuance to the "nothing leaves your machine" promise: the very first
 transcription downloads the Whisper model from Hugging Face if it isn't cached
@@ -209,6 +213,7 @@ model fetch touches the network, after which everything runs offline.
 | `whisper`    | `faster-whisper` transcription backend (required for dictation)       |
 | `recording`  | microphone capture via `sounddevice` (required for live dictation)    |
 | `cuda`       | NVIDIA GPU acceleration — see *GPU acceleration* below                |
+| `macos`      | macOS only: insertion, global shortcut, menu-bar icon (no-op elsewhere) |
 
 ### System packages
 
@@ -401,6 +406,11 @@ Polish backends:
 Running the desktop app puts an Aparté icon in the system tray: three bars at
 rest, a filled disc while the microphone is open, and a menu to open the app,
 copy the last dictation, jump to Settings, or quit.
+
+On macOS the same icon sits in the menu bar, drawn in black and white so the
+system can tint it for a light or a dark bar, with the elapsed time beside it
+while you dictate. Its menu adds an **update** item that pulls and reinstalls in
+place. It comes with the `macos` extra; the rest of this section is Linux.
 
 It relies on PyGObject and the AppIndicator typelib, which are system packages
 rather than pip ones:

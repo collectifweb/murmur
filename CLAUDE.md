@@ -383,6 +383,43 @@ phrases voisines.
     « échec → notification `critical` » garde une porte que macOS n'ouvre pas : il
     reste juste, il est inatteignable. Ne pas coder de vérification passive
     là-contre — il faudrait observer un vrai appui.
+- **Sur macOS, l'icône de barre de menus tient la boucle** (`macos_tray.py`, M6).
+  C'est le correctif du défaut d'usage de M8 : rien n'indiquait que le micro était
+  ouvert. Les garde-fous :
+  - **`rumps` devient la boucle quand un tray existe.** `rumps.App.run()` appelle
+    `AppHelper.runEventLoop()` — exactement ce que fait `_appkit_run_loop`, et il n'y
+    a qu'un fil principal. `MacTray.run_loop(on_ready, on_quit)` est donc le
+    remplaçant direct du point d'injection de M5 ; `serve_macos` garde tout le reste
+    (raccourci, état publié, démontage ordonné) et retombe sur `_appkit_run_loop`
+    quand il n'y a pas d'icône.
+  - **`quit_button=None` est obligatoire.** Sinon rumps ajoute son propre « Quit »,
+    câblé sur `quit_application()` → `NSApplication.terminate_`, **qui ne revient
+    jamais de `run()`** : le `finally` de `serve_macos` ne s'exécuterait pas. D'où un
+    démontage **idempotent** (drapeau + `RLock`, chaque étape dans son `try`) passé à
+    la boucle et appelé par « Quitter » **avant** de terminer.
+  - **`recording_snapshot()` se lit sans verrou.** `RecordingController._lock` est
+    tenu pendant `ensure_microphone_access()` — jusqu'à 30 s de fenêtre TCC — et le
+    tray sonde depuis le fil principal : une lecture verrouillée figerait la barre de
+    menus au pire moment. La cohérence tient à l'**ordre d'écriture** (`_started_at`
+    posé avant `RECORDING`, effacé après `PROCESSING`) et à l'atomicité des lectures
+    d'attributs. Ne pas y ajouter un état qui devrait être cohérent avec un autre.
+    Même raison pour `controller.shutdown(timeout=2.0)`, borné au démontage.
+  - **Le tray observe, il ne pilote pas.** Aucun article ne démarre ni n'arrête une
+    dictée : c'est le raccourci in-process qui le fait, comme l'exige l'invariant
+    Darwin (aucun effet système déclenché de l'extérieur du processus).
+  - **La mise à jour du menu ne relance rien.** `os.execv` relancerait
+    l'interpréteur, pas l'application responsable vue par TCC — question M7. D'où
+    `_INSTALLED_PENDING_RESTART` dans `update.py` : drapeau **local au processus**,
+    armé sur `DONE_MARKER`, qui fait rendre `restart_required` à `check_update()`
+    **avant** git et avant le réseau — sans lui, `__version__` reste périmé et la même
+    version serait reproposée indéfiniment. Le panneau web n'offre pas le bouton là
+    où la route est refusée (`can_apply`), il renvoie à l'icône.
+  - **Le check `doctor` s'appelle `menubar`, pas `tray`** : `tray` est celui du
+    panneau GTK Linux et porte déjà `check.tray.detail` (PyGObject), qui écraserait un
+    détail macOS. `detail` dynamique donc **sans clé i18n**, jamais essentiel.
+  - **Ne pas écrire d'invariant sur le Ctrl-C sous rumps** avant de l'avoir observé
+    sur un Mac — c'est exactement l'erreur corrigée en M8.
+    (M6, `docs/plan-portage-macos-m6.md`.)
 - **Le micro macOS se demande explicitement, sinon on enregistre du silence.**
   Ouvrir un flux PortAudio **ne déclenche aucune fenêtre TCC** : le flux s'ouvre
   « sans erreur » pendant que le statut reste `not_determined`, et la capture ne

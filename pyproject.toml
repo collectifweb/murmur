@@ -54,8 +54,7 @@ macos = [
   "pyobjc-framework-Cocoa; sys_platform == 'darwin'",         # AppKit / run loop (M5)
   "pyobjc-framework-AVFoundation; sys_platform == 'darwin'",  # microphone permission (M2)
   "pyobjc-framework-ApplicationServices; sys_platform == 'darwin'",  # AXIsProcessTrusted — Accessibility (M2)
-  "rumps; sys_platform == 'darwin'",                          # menu-bar tray (M6)
-  "quickmachotkey; sys_platform == 'darwin'",                 # global-shortcut façade (M5)
+  "rumps; sys_platform == 'darwin'",                          # menu-bar icon (M6)
 ]
 dev = [
   "pytest>=8.0",

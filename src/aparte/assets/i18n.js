@@ -139,6 +139,7 @@ window.APARTE_I18N = {
     "check.model_ready.label": "Modèle de reconnaissance vocale",
     "check.model_ready.detail": "téléchargé une fois au premier usage, puis hors-ligne",
     "check.hotkey.label": "Raccourci de dictée",
+    "check.menubar.label": "Icône de barre de menus",
 
     "hotkey.title": "Raccourci clavier",
     "hotkey.intro": "Appuie une fois pour lancer la dictée, encore une fois pour transcrire et insérer dans l'app au premier plan.",
@@ -336,6 +337,7 @@ window.APARTE_I18N = {
     "check.model_ready.label": "Speech model downloaded",
     "check.model_ready.detail": "downloaded once on first use, then offline",
     "check.hotkey.label": "Dictation shortcut",
+    "check.menubar.label": "Menu-bar icon",
 
     "hotkey.title": "Keyboard shortcut",
     "hotkey.intro": "Press once to start dictation, again to transcribe and insert into the focused app.",

@@ -256,6 +256,7 @@ def _collect_checks_macos(settings: Settings, hotkey_state=None) -> list[Check]:
             fix="aparte config init",
         ),
         _hotkey_check(settings, hotkey),
+        _tray_check(),
     ]
     if settings.polish_backend == "ollama":
         checks.append(
@@ -308,6 +309,34 @@ def _hotkey_check(settings: Settings, state) -> Check:
             detail=f"{safe_hotkey_label(configured)} · start Aparté to activate it",
         )
     return Check("hotkey", label, False, "System", detail="aparte install-hotkey")
+
+
+def _tray_check() -> Check:
+    """The menu-bar icon check (macOS only).
+
+    On Mac the icon is the only permanent sign that the microphone is open, so a tray
+    that failed to appear must be sayable somewhere — silence there is the very defect
+    M6 closes. Never essential: dictating from the browser or the shortcut still works.
+
+    Its ``detail`` is DYNAMIC, so it carries NO ``check.tray.detail`` i18n key — the
+    ``hotkey`` and ``config`` convention. The branches the web panel can reach are
+    language-free (an install command, or the system's own error): the panel is served
+    by the very process that built the tray, so it never lands on the English guidance
+    line, which belongs to the CLI ``doctor`` running beside a started app.
+    """
+    from .macos_tray import MISSING_DEPENDENCY, tray_build_outcome
+
+    label = "Menu-bar icon"
+    outcome = tray_build_outcome()
+    if outcome == "ok":
+        return Check("menubar", label, True, "System", detail="rumps")
+    if outcome is not None:
+        fix = MISSING_DEPENDENCY if outcome == MISSING_DEPENDENCY else None
+        return Check("menubar", label, False, "System", detail=outcome, fix=fix)
+    # Nothing tried here: the CLI, standing beside the app rather than inside it.
+    if not _has_module("rumps"):
+        return Check("menubar", label, False, "System", detail=MISSING_DEPENDENCY, fix=MISSING_DEPENDENCY)
+    return Check("menubar", label, False, "System", detail="rumps · start Aparté to show the icon")
 
 
 def _query_hotkey_state():

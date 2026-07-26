@@ -266,6 +266,22 @@ def _set_accessory_policy() -> None:
     NSApplication.sharedApplication().setActivationPolicy_(NSApplicationActivationPolicyAccessory)
 
 
+# What building the icon did **in this process**: None (nothing tried), "ok", or the
+# reason it did not happen. Process-local on purpose, like update's restart flag: the
+# CLI `doctor` runs in another process, where it stays None and the check falls back to
+# what is installed. Read through :func:`tray_build_outcome`.
+_BUILD_OUTCOME: str | None = None
+
+# Reported as the outcome when the dependency is simply absent — an installation
+# choice, not a failure. Same string the doctor check turns into its fix line.
+MISSING_DEPENDENCY = 'pip install -e ".[macos]"'
+
+
+def tray_build_outcome() -> str | None:
+    """What :func:`build_tray` last did here: ``"ok"``, a reason, or None if untried."""
+    return _BUILD_OUTCOME
+
+
 def build_tray(url, settings, controller, hotkey_state) -> "MacTray | None":
     """The menu-bar icon, or None when it cannot exist.
 
@@ -275,13 +291,16 @@ def build_tray(url, settings, controller, hotkey_state) -> "MacTray | None":
     defect (nothing on screen says the microphone is open), so a swallowed exception
     here would quietly recreate the very bug it fixes.
     """
+    global _BUILD_OUTCOME
     try:
         rumps = _rumps()
     except Exception:
+        _BUILD_OUTCOME = MISSING_DEPENDENCY
         return None
     try:
-        return MacTray(rumps, url, settings, controller, hotkey_state)
+        tray = MacTray(rumps, url, settings, controller, hotkey_state)
     except Exception as exc:
+        _BUILD_OUTCOME = str(exc)
         print(f"aparte: could not build the menu-bar icon: {exc}", file=sys.stderr)
         try:
             notify(
@@ -292,6 +311,8 @@ def build_tray(url, settings, controller, hotkey_state) -> "MacTray | None":
         except Exception:
             pass
         return None
+    _BUILD_OUTCOME = "ok"
+    return tray
 
 
 class MacTray:

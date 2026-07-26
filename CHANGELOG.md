@@ -11,9 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Experimental macOS groundwork (M0).** A platform-dispatch seam
   (`platform_dispatch.py`) now selects the OS-specific launcher/autostart backend,
-  and a `[macos]` packaging extra pins the exact PyObjC frameworks, `rumps`, and
-  `quickmachotkey` — each gated to `sys_platform == "darwin"`, so the extra
-  installs nothing off a Mac. The README documents that the **browser dictation**
+  and a `[macos]` packaging extra pins the exact PyObjC frameworks and `rumps` —
+  each gated to `sys_platform == "darwin"`, so the extra installs nothing off a Mac. The README documents that the **browser dictation**
   path already runs on macOS today. No macOS feature ships yet: insertion into the
   active app, the global shortcut, the tray, and native notifications remain
   Linux-only, and the macOS modules themselves are not written. Linux behaviour is
@@ -79,6 +78,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only, and the Darwin route guard from M3 stands. Linux behaviour is unchanged.
   Proven with mocked unit tests on Linux; the native run loop, Carbon registration,
   and reserved-combo behaviour are validated later on a Mac (M8).
+- **macOS menu-bar icon (M6).** On a Mac nothing told you the microphone was open:
+  no window, no icon, and an accessory app draws nothing. During the first native
+  run the tester pressed the shortcut, saw no sign of it, pressed again — and
+  stopped the recording the first press had just started. Aparté now lives in the
+  menu bar. The icon changes shape while recording (three bars at rest, a filled
+  disc while the mic is open; template images, so macOS tints them for a light or a
+  dark menu bar), an elapsed timer runs beside it, and a `…` shows while the
+  transcript is being written. The menu **observes** and never drives: the current
+  state, the shortcut and whether it actually registered, open Aparté, copy the last
+  dictation, settings, an **update** item (check, then install — no restart, and it
+  says plainly that the new version runs at the next launch), and Quit, which tears
+  the shortcut, the recorder and the server down in order. `rumps` now owns the
+  single AppKit run loop M5 introduced; the HTTP server keeps its daemon thread and
+  still owns the recorder. Updating from the web panel is unavailable on macOS — the
+  route was already refused there — and the panel now says where to update instead.
+  Without the `[macos]` extra there is simply no icon, and `aparte doctor` says how
+  to get one. Linux behaviour is unchanged. Proven with mocked unit tests on Linux;
+  the native menu bar is validated on a Mac.
 
 ### Fixed
 

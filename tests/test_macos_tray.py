@@ -329,6 +329,9 @@ class RefreshTest(TrayBindingTest):
 class BuildTrayTest(unittest.TestCase):
     def setUp(self):
         self.notify = mock.patch.object(macos_tray, "notify").start()
+        # The outcome is module-level and read by `aparte doctor`: a test that left
+        # its own value behind would answer for the next one.
+        mock.patch.object(macos_tray, "_BUILD_OUTCOME", None).start()
         self.addCleanup(mock.patch.stopall)
 
     def _build(self):
@@ -340,6 +343,7 @@ class BuildTrayTest(unittest.TestCase):
         with mock.patch.object(macos_tray, "_rumps", side_effect=ImportError("no rumps")):
             self.assertIsNone(self._build())
         self.notify.assert_not_called()
+        self.assertEqual(macos_tray.tray_build_outcome(), macos_tray.MISSING_DEPENDENCY)
 
     def test_an_unexpected_failure_is_loud(self):
         # M6 exists to close M8's main usability defect. A silently missing icon
@@ -349,6 +353,14 @@ class BuildTrayTest(unittest.TestCase):
             self.assertIsNone(self._build())
         self.notify.assert_called_once()
         self.assertEqual(self.notify.call_args.kwargs.get("urgency"), "critical")
+        self.assertEqual(macos_tray.tray_build_outcome(), "no status bar")
+
+    def test_a_built_tray_records_that_it_exists(self):
+        # What `aparte doctor` reads: nothing else in the process knows the icon is up.
+        with mock.patch.object(macos_tray, "_rumps", return_value=FakeRumps()), \
+             mock.patch.object(macos_tray, "MacTray", return_value=mock.Mock()):
+            self.assertIsNotNone(self._build())
+        self.assertEqual(macos_tray.tray_build_outcome(), "ok")
 
 
 FR = macos_tray.LABELS["fr"]

@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest import mock
 
 import aparte
-from aparte import diagnostics
+from aparte import diagnostics, macos_tray
 from aparte.config import Settings
 from aparte.diagnostics import collect_checks, collect_diagnostics
 from aparte.macos_hotkey import HotkeyState
@@ -66,6 +66,7 @@ class MacDiagnosticsTest(unittest.TestCase):
         )
         self.assertNotIn("paste", keys)  # synthetic paste is M3
         self.assertNotIn("tray", keys)  # PyGObject tray is Linux-only
+        self.assertIn("menubar", keys)  # its macOS counterpart, under its own key
 
     def test_the_summary_does_not_crash_without_a_paste_check(self):
         with self._mac_env():
@@ -104,6 +105,17 @@ class MacDiagnosticsTest(unittest.TestCase):
         self.assertIn("System Settings", text)
 
 
+def _mac_env():
+    """A macOS host with its permissions granted, for the two per-check classes below."""
+    stack = contextlib.ExitStack()
+    stack.enter_context(mock.patch.object(diagnostics, "is_macos", return_value=True))
+    stack.enter_context(mock.patch.object(diagnostics, "_whisper_model_cached", return_value=True))
+    stack.enter_context(mock.patch("aparte.macos_permissions.microphone_authorization", return_value="authorized"))
+    stack.enter_context(mock.patch("aparte.macos_permissions.accessibility_trusted", return_value=True))
+    stack.enter_context(mock.patch.object(diagnostics, "_query_hotkey_state", return_value=None))
+    return stack
+
+
 class MacHotkeyCheckTest(unittest.TestCase):
     """The macOS global-shortcut check (M5d): registered → the combo; refused →
     the OSStatus; unconfigured → install-hotkey; and, from the CLI with no server
@@ -111,13 +123,7 @@ class MacHotkeyCheckTest(unittest.TestCase):
     carry no i18n detail key. The machine here is Linux; the platform is mocked."""
 
     def _mac_env(self):
-        stack = contextlib.ExitStack()
-        stack.enter_context(mock.patch.object(diagnostics, "is_macos", return_value=True))
-        stack.enter_context(mock.patch.object(diagnostics, "_whisper_model_cached", return_value=True))
-        stack.enter_context(mock.patch("aparte.macos_permissions.microphone_authorization", return_value="authorized"))
-        stack.enter_context(mock.patch("aparte.macos_permissions.accessibility_trusted", return_value=True))
-        stack.enter_context(mock.patch.object(diagnostics, "_query_hotkey_state", return_value=None))
-        return stack
+        return _mac_env()
 
     def _hotkey(self, checks):
         return next(c for c in checks if c.key == "hotkey")
@@ -165,6 +171,59 @@ class MacHotkeyCheckTest(unittest.TestCase):
         i18n = I18N_JS.read_text(encoding="utf-8")
         self.assertIn('"check.hotkey.label"', i18n)
         self.assertNotIn('"check.hotkey.detail"', i18n)
+
+
+class MacMenuBarCheckTest(unittest.TestCase):
+    """The macOS menu-bar icon check (M6e). On Mac the icon is the only permanent
+    sign that the microphone is open, so a tray that never appeared has to be
+    sayable. Its own key — `tray` is the Linux PyGObject check — and a dynamic
+    detail, hence no i18n detail key. The machine here is Linux; nothing is built."""
+
+    def _mac_env(self):
+        return _mac_env()
+
+    def _tray(self, checks):
+        return next(c for c in checks if c.key == "menubar")
+
+    def test_the_menubar_check_reports_what_this_process_built(self):
+        # In-process (the resident server): "ok" passes, a failure carries the system's
+        # own words, and a missing dependency carries its install command as the fix.
+        cases = {"ok": (True, "rumps"), "no status bar": (False, "no status bar")}
+        for outcome, (ok, detail) in cases.items():
+            with self._mac_env():
+                with mock.patch.object(macos_tray, "_BUILD_OUTCOME", outcome):
+                    tray = self._tray(collect_checks(Settings()))
+            self.assertEqual(tray.ok, ok, outcome)
+            self.assertIn(detail, tray.detail)
+
+        with self._mac_env():
+            with mock.patch.object(macos_tray, "_BUILD_OUTCOME", macos_tray.MISSING_DEPENDENCY):
+                tray = self._tray(collect_checks(Settings()))
+        self.assertEqual(tray.fix, macos_tray.MISSING_DEPENDENCY)
+
+    def test_the_cli_reads_what_is_installed_when_nothing_was_built(self):
+        # Another process: rumps present → start the app; absent → install it.
+        with self._mac_env():
+            with mock.patch.object(macos_tray, "_BUILD_OUTCOME", None):
+                with mock.patch.object(diagnostics, "_has_module", return_value=True):
+                    present = self._tray(collect_checks(Settings()))
+                with mock.patch.object(diagnostics, "_has_module", return_value=False):
+                    absent = self._tray(collect_checks(Settings()))
+        self.assertIn("start Aparté", present.detail)
+        self.assertEqual(absent.fix, macos_tray.MISSING_DEPENDENCY)
+
+    def test_the_menubar_check_is_never_essential(self):
+        # No icon still dictates — from the browser, and from the shortcut.
+        with self._mac_env():
+            tray = self._tray(collect_checks(Settings()))
+        self.assertFalse(tray.essential)
+
+    def test_the_menubar_detail_carries_no_static_i18n_key(self):
+        # Its own key, not the Linux tray's: `check.tray.detail` exists and names
+        # PyGObject, and a shared key would overwrite this dynamic detail.
+        i18n = I18N_JS.read_text(encoding="utf-8")
+        self.assertEqual(i18n.count('"check.menubar.label"'), 2)  # fr + en
+        self.assertNotIn('"check.menubar.detail"', i18n)
 
 
 if __name__ == "__main__":

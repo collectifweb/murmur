@@ -1215,7 +1215,7 @@ Bénéfice de correction qui vient avec le bundle, découvert en M8 : aujourd'hu
 **toutes les autorisations macOS sont accordées à Terminal**, pas à Aparté. Un
 vrai bundle rend le modèle de permissions honnête et lisible.
 
-### M6 — l'icône de barre de menus macOS (planifié + validé `/confront-codex` le 25/07)
+### M6 — l'icône de barre de menus macOS (écrit le 25/07, validation native à faire)
 
 **Plan consolidé : `docs/plan-portage-macos-m6.md`.** Consensus bilatéral en 3 rounds,
 archives `docs/archives/confront-codex-portage-macos-m6-2026-07-25-1956/`.
@@ -1277,21 +1277,34 @@ qui est impossible ici : pas de PyObjC sous Linux).
 
 **Découpage (chaque lot avec ses tests et son commit).**
 
-- [ ] **M6a — socle testable, zéro natif.** `macos_tray.py` : libellés fr/en, vue pure,
+- [x] **M6a — socle testable, zéro natif.** `macos_tray.py` : libellés fr/en, vue pure,
       `format_elapsed`. `RecordingController` : `_started_at` ordonné,
       `recording_snapshot()` sans verrou, `shutdown(timeout=None)` borné.
-- [ ] **M6b — cohabitation des boucles.** `MacTray`, `build_tray()`, `serve_macos`
+- [x] **M6b — cohabitation des boucles.** `MacTray`, `build_tray()`, `serve_macos`
       (`url=`, fabrique injectable), démontage sous `RLock` best-effort, second filet
       `rumps.events.before_quit` si la version l'expose.
-- [ ] **M6c — les deux icônes.** SVG monochromes + PNG 40 px commités, régénération
+- [x] **M6c — les deux icônes.** SVG monochromes + PNG 40 px commités, régénération
       documentée, test « aucun pixel coloré ». `/impeccable`.
-- [ ] **M6d — « Mettre à jour ».** Deux temps, refus hors `idle`, installation sans
+- [x] **M6d — « Mettre à jour ».** Deux temps, refus hors `idle`, installation sans
       relance, `restart_required`, `_installed_extras()` élargi, panneau web cohérent.
-- [ ] **M6e — doc + check `doctor` `tray`.** `CLAUDE.md`, `DESIGN.md`, `CHANGELOG.md`,
-      ce fichier. Retrait de `quickmachotkey` de l'extra `macos` (dette M8).
+- [x] **M6e — doc + check `doctor`.** `CLAUDE.md`, `DESIGN.md`, `CHANGELOG.md`, ce
+      fichier. Retrait de `quickmachotkey` de l'extra `macos` (dette M8).
 
-**Ce qui restera à prouver sur un vrai Mac** : checklist en fin de
+**Deux écarts au plan, tranchés en écrivant.**
+
+- **Le check `doctor` s'appelle `menubar`, pas `tray`.** La clé `tray` est déjà celle
+  du panneau GTK Linux, et elle porte `check.tray.detail` (« demande PyGObject ») :
+  la réutiliser aurait fait écraser le détail dynamique macOS par une phrase sur
+  PyGObject — exactement le piège écrit dans `CLAUDE.md` § Interface. Clé propre,
+  libellé traduit, `detail` sans clé.
+- **Le panneau web dit `can_apply`.** Prévu « pas de bouton sur Darwin » ; le fait
+  vient du serveur (la route est refusée là-bas), pas d'une supposition du
+  navigateur — c'est donc `/api/update/check` qui le porte.
+
+**Ce qui reste à prouver sur un vrai Mac** : checklist en fin de
 `docs/plan-portage-macos-m6.md` (outillage prêt, `.claude/mac-validation/README.md`).
+Tout ce qui précède est prouvé sous Linux avec des faux — donc l'orchestration, jamais
+le comportement d'AppKit.
 
 ### Windows, pour mémoire (étudié le 23/07, non planifié)
 
