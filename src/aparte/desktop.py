@@ -105,7 +105,7 @@ def run_desktop(host: str, port: int, settings: Settings, open_browser: bool = T
         # AppKit/Carbon piece loads off macOS.
         from .macos_runloop import serve_macos
 
-        serve_macos(server, controller, settings)
+        serve_macos(server, controller, settings, url=url)
         return
     # The tray icon needs GTK on the main thread, so the server moves off it.
     # Without the system bindings there is no tray, and nothing changes.

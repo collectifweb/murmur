@@ -8,11 +8,21 @@ lifecycle:
 
     NSApplication ready → register hotkey → run loop (blocks) → ordered teardown
 
-Two seams keep it testable on the Linux dev machine, where no run loop exists:
+Since M6 the loop is usually **rumps'**: a menu-bar tray is an ``NSStatusItem`` on
+the same single run loop, and ``rumps.App.run()`` is ``AppHelper.runEventLoop()``
+under another name. So the tray provides the runner and this module keeps everything
+else. The teardown moved out of the ``finally`` and into a named, idempotent function
+for one blunt reason: rumps quits through ``NSApplication.terminate_``, which never
+returns from ``run()`` — a ``finally`` alone would never fire on the normal way out.
 
-- ``run_loop(on_ready)`` — the real one is the injected default; a test passes a
-  fake that fires ``on_ready`` (the moment registration must happen) then returns.
+Three seams keep it testable on the Linux dev machine, where no run loop exists:
+
+- ``run_loop(on_ready, on_quit)`` — the real one is the injected default; a test
+  passes a fake that fires ``on_ready`` (the moment registration must happen) then
+  returns.
 - ``register`` — the real Carbon façade by default; a fake in tests.
+- ``tray_factory`` — :func:`aparte.macos_tray.build_tray` by default; a fake tray in
+  tests, and ``None`` on a Mac without rumps installed.
 
 The native AppKit/Carbon imports live inside :func:`_appkit_run_loop`, reached
 only on a real Mac; the module itself stays importable everywhere.
@@ -31,17 +41,41 @@ from .macos_hotkey import (
     register_hotkey,
     safe_hotkey_label,
 )
+from .macos_tray import build_tray
 from .notify import notify
 
+# How long the teardown waits for the recorder's lock before giving up on a clean
+# discard. `_start_locked` holds that lock across the microphone permission dialog —
+# up to 30 s — and the main thread is quitting: freezing the menu bar for half a
+# minute is worse than leaving the OS to reclaim the device.
+SHUTDOWN_TIMEOUT = 2.0
 
-def serve_macos(server, controller, settings, *, register=register_hotkey, run_loop=None) -> None:
+
+def serve_macos(
+    server,
+    controller,
+    settings,
+    *,
+    url: str = "",
+    register=register_hotkey,
+    run_loop=None,
+    tray_factory=build_tray,
+) -> None:
     """Serve on a daemon thread; own the shortcut and the AppKit loop on the main one.
 
-    Blocks until the app quits, then tears down in a fixed order. ``register`` and
-    ``run_loop`` are injected in tests so no native code runs off macOS.
+    Blocks until the app quits, then tears down in a fixed order. ``register``,
+    ``run_loop`` and ``tray_factory`` are injected in tests so no native code runs off
+    macOS.
+
+    When the menu-bar tray can be built, **it** runs the loop (``rumps.App.run()`` is
+    ``AppHelper.runEventLoop()`` under another name, and there is only one main
+    thread). This function keeps the shortcut, the published state and the teardown
+    either way; without a tray, the plain runner is used and nothing else changes.
     """
+    tray = None
     if run_loop is None:
-        run_loop = _appkit_run_loop
+        tray = tray_factory(url, settings, controller, lambda: server.RequestHandlerClass.hotkey_state)
+        run_loop = tray.run_loop if tray is not None else _appkit_run_loop
 
     spec = getattr(settings, "hotkey", "") or ""
     # The dispatcher filters repeats at arrival and calls toggle() on its own
@@ -58,44 +92,85 @@ def serve_macos(server, controller, settings, *, register=register_hotkey, run_l
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
     handle: object | None = None
+    torn = False
+    # Reentrant: "Quit" → teardown → quit_application() → applicationWillTerminate_ →
+    # teardown, all on the main thread. A plain Lock would deadlock on itself there.
+    gate = threading.RLock()
 
     def on_ready() -> None:
         # Fired once the run loop is live (NSApplication exists) — the hotkey must
-        # be registered here, not before, or Carbon has no target to attach to.
+        # be registered here, not before, or Carbon has no target to attach to. Under
+        # the tray this is a timer callback, so it can land *after* a very quick quit:
+        # the torn check under the same lock is what stops a shortcut from being
+        # registered onto an already dismantled app.
         nonlocal handle
-        if not spec:
-            # No shortcut configured — run `aparte install-hotkey` to set one. The
-            # server still serves the web UI and browser dictation; doctor points
-            # the user at install-hotkey.
-            handler_cls.hotkey_state = HotkeyState(configured_key=None)
-            return
-        try:
-            handle = register(spec, dispatcher.trigger)
-        except HotkeyError as exc:
-            # The server keeps serving the web UI and browser dictation; only the
-            # global shortcut is dead. Make it observable (the state below, doctor,
-            # a startup notification) instead of crashing or failing in silence.
-            handler_cls.hotkey_state = HotkeyState(
-                configured_key=spec, status=exc.status, error=str(exc)
-            )
-            _notify_register_failure(spec, exc)
-        else:
-            handler_cls.hotkey_state = HotkeyState(registered=True, configured_key=spec)
+        failure = None
+        with gate:
+            if torn:
+                return
+            if not spec:
+                # No shortcut configured — run `aparte install-hotkey` to set one. The
+                # server still serves the web UI and browser dictation; doctor points
+                # the user at install-hotkey.
+                handler_cls.hotkey_state = HotkeyState(configured_key=None)
+                return
+            try:
+                handle = register(spec, dispatcher.trigger)
+            except HotkeyError as exc:
+                # The server keeps serving the web UI and browser dictation; only the
+                # global shortcut is dead. Make it observable (the state below, doctor,
+                # a startup notification) instead of crashing or failing in silence.
+                handler_cls.hotkey_state = HotkeyState(
+                    configured_key=spec, status=exc.status, error=str(exc)
+                )
+                failure = exc
+            else:
+                handler_cls.hotkey_state = HotkeyState(registered=True, configured_key=spec)
+        # Outside the lock: the notification shells out to osascript, and teardown
+        # has no reason to wait behind it.
+        if failure is not None:
+            _notify_register_failure(spec, failure)
+
+    def teardown() -> None:
+        """Ordered, idempotent, best-effort — the app's single way down.
+
+        Three paths lead here and all three must work: the tray's "Quit" item (which
+        calls this *before* terminate_, since terminate_ never returns), rumps'
+        before-quit hook when the version has one, and the ``finally`` below for every
+        path where the loop hands control back.
+
+        Each step is guarded on its own: a hotkey that refuses to unregister must not
+        cost the server its socket.
+        """
+        nonlocal torn
+        with gate:
+            if torn:
+                return
+            torn = True
+            steps = []
+            if tray is not None:
+                steps.append(("tray", tray.close))
+            if handle is not None:
+                # Drop the hotkey early so no trigger arrives mid-shutdown.
+                steps.append(("hotkey", handle.unregister))
+            # Drain the dispatcher (bounded join of any in-flight toggle) before the
+            # controller discards a live recording; the server goes last.
+            steps.append(("dispatcher", dispatcher.close))
+            steps.append(("recorder", lambda: controller.shutdown(timeout=SHUTDOWN_TIMEOUT)))
+            steps.append(("server", server.shutdown))
+            steps.append(("socket", server.server_close))
+            for what, step in steps:
+                try:
+                    step()
+                except Exception as exc:
+                    print(f"aparte: teardown step {what} failed: {exc}", file=sys.stderr)
 
     try:
-        run_loop(on_ready)
+        run_loop(on_ready, teardown)
     except KeyboardInterrupt:
         print("\nStopping desktop server.")
     finally:
-        # Ordered teardown. Drop the hotkey first so no trigger arrives mid-shutdown;
-        # drain the dispatcher (bounded join of any in-flight toggle) before the
-        # controller discards a live recording; the server goes last.
-        if handle is not None:
-            handle.unregister()
-        dispatcher.close()
-        controller.shutdown()
-        server.shutdown()
-        server.server_close()
+        teardown()
 
 
 def _notify_register_failure(spec: str, exc: HotkeyError) -> None:
@@ -169,8 +244,14 @@ def run_hotkey_diagnostic(
     return seen["count"]
 
 
-def _appkit_run_loop(on_ready) -> None:
+def _appkit_run_loop(on_ready, on_quit=None) -> None:
     """Run the AppKit event loop on the main thread until the app quits.
+
+    The fallback runner, used when no menu-bar tray could be built (rumps missing).
+    ``on_quit`` is accepted and ignored: this path has no Quit item, and Ctrl-C kills
+    the process outright (see below). The parameter is optional so
+    :func:`run_hotkey_diagnostic`, which shares this seam, keeps calling it with one
+    argument.
 
     Native — imported lazily and confined here. Not covered by the Linux unit
     tests (which inject a fake run loop); validated by hand in the M8 smoke suite.

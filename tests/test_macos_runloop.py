@@ -47,13 +47,18 @@ class FakeController:
         self.order = order
         self.toggle_thread = None
         self.toggled = threading.Event()
+        self.shutdown_timeout = "unset"
 
     def toggle(self):
         self.toggle_thread = threading.current_thread()
         self.toggled.set()
 
-    def shutdown(self):
+    def shutdown(self, timeout=None):
+        self.shutdown_timeout = timeout
         self.order.append("controller.shutdown")
+
+    def recording_snapshot(self):
+        return ("idle", None)
 
 
 class FakeHandle:
@@ -98,7 +103,7 @@ class ServeMacosTest(unittest.TestCase):
     def _run(self, settings, register, *, press=False):
         """Drive serve_macos with a fake run loop that fires on_ready, then quits."""
 
-        def run_loop(on_ready):
+        def run_loop(on_ready, on_quit=None):
             on_ready()                       # NSApplication ready → register here
             if press:
                 register.on_trigger()        # the OS delivers one hotkey press
@@ -169,6 +174,108 @@ class ServeMacosTest(unittest.TestCase):
         self.assertIn("taken", state.error)
         self.notify.assert_called_once()
         self.assertEqual(self.notify.call_args.kwargs.get("urgency"), "critical")
+
+
+class FakeTray:
+    """A menu-bar tray that owns the loop, like rumps does — without any of it.
+
+    ``run_loop`` fires on_ready (the one-shot timer), optionally the Quit item, then
+    returns. On a real Mac it would *not* return after Quit — terminate_ never comes
+    back — so letting it return here is deliberate: it drives the teardown twice and
+    proves the idempotence that makes both paths safe.
+    """
+
+    def __init__(self, order, *, quit_clicked=False, ready_after_quit=False):
+        self.order = order
+        self.quit_clicked = quit_clicked
+        self.ready_after_quit = ready_after_quit
+        self.closed = 0
+
+    def run_loop(self, on_ready, on_quit=None):
+        if self.ready_after_quit:
+            on_quit()        # a very fast Quit, before the ready timer ever fires
+            on_ready()       # the late timer callback lands on a dismantled app
+            return
+        on_ready()
+        if self.quit_clicked:
+            on_quit()
+
+    def close(self):
+        self.closed += 1
+        self.order.append("tray.close")
+
+
+class TrayRunLoopTest(unittest.TestCase):
+    """M6b — the tray owns the loop; serve_macos keeps the shortcut and the teardown."""
+
+    def setUp(self):
+        self.order = []
+        self.controller = FakeController(self.order)
+        self.server = FakeServer(self.order)
+        self.notify = mock.patch.object(macos_runloop, "notify").start()
+        self.addCleanup(mock.patch.stopall)
+        self.settings = SimpleNamespace(hotkey="ctrl+opt+d")
+
+    def _serve(self, tray, register=None):
+        register = register or FakeRegister(handle=FakeHandle(self.order))
+        serve_macos(
+            self.server, self.controller, self.settings,
+            url="http://127.0.0.1:8765", register=register, tray_factory=lambda *a: tray,
+        )
+        return register
+
+    def test_the_tray_provides_the_loop_and_the_shortcut_still_registers(self):
+        register = self._serve(FakeTray(self.order))
+        self.assertEqual(register.spec, "ctrl+opt+d")
+        self.assertTrue(self.server.serving.is_set())
+
+    def test_quitting_from_the_menu_tears_down_in_order(self):
+        # The tray goes first (its timers stop polling a controller about to close),
+        # the socket last.
+        self._serve(FakeTray(self.order, quit_clicked=True))
+        self.assertEqual(
+            self.order,
+            ["tray.close", "hotkey.unregister", "controller.shutdown",
+             "server.shutdown", "server.server_close"],
+        )
+
+    def test_the_teardown_runs_once_even_though_two_paths_call_it(self):
+        # "Quit" calls it before terminate_, and the finally calls it again on every
+        # path where the loop hands control back. Repeating it would double-close the
+        # socket and unregister a hotkey twice, which Carbon leaves undefined.
+        tray = FakeTray(self.order, quit_clicked=True)
+        self._serve(tray)
+        self.assertEqual(self.order.count("server.server_close"), 1)
+        self.assertEqual(tray.closed, 1)
+
+    def test_the_recorder_shutdown_is_bounded(self):
+        # Quitting must not freeze the menu bar behind the 30 s microphone dialog.
+        self._serve(FakeTray(self.order, quit_clicked=True))
+        self.assertEqual(self.controller.shutdown_timeout, macos_runloop.SHUTDOWN_TIMEOUT)
+
+    def test_a_failing_step_does_not_cost_the_ones_after_it(self):
+        handle = FakeHandle(self.order)
+        handle.unregister = mock.Mock(side_effect=RuntimeError("carbon says no"))
+        self._serve(FakeTray(self.order, quit_clicked=True), FakeRegister(handle=handle))
+        # The socket still closes, which is the one that matters for a restart.
+        self.assertIn("server.server_close", self.order)
+        self.assertIn("controller.shutdown", self.order)
+
+    def test_a_late_ready_callback_never_registers_onto_a_dismantled_app(self):
+        # on_ready became asynchronous (a rumps timer): a quick Quit can beat it, and
+        # a shortcut registered afterwards would outlive its own teardown.
+        register = self._serve(FakeTray(self.order, ready_after_quit=True))
+        self.assertIsNone(register.spec)
+        self.assertEqual(self.order.count("server.server_close"), 1)
+
+    def test_without_a_tray_the_plain_runner_is_used_unchanged(self):
+        # No rumps installed: the M5 path, exactly as before.
+        with mock.patch.object(macos_runloop, "_appkit_run_loop") as runner:
+            self._serve(None)
+        runner.assert_called_once()
+        self.assertEqual(
+            self.order, ["controller.shutdown", "server.shutdown", "server.server_close"]
+        )
 
 
 class RunHotkeyDiagnosticTest(unittest.TestCase):
