@@ -106,6 +106,13 @@ class LauncherSourceTest(unittest.TestCase):
         self.assertIn('"aparte"', source)
         self.assertIn('"desktop"', source)
 
+    def test_custom_arguments_are_baked_in(self):
+        # The M7-0 probe runs its own script rather than the server.
+        source = macos_desktop.launcher_source("/x/python3", args=("/tmp/probe.py", "--mic"))
+        self.assertIn('"/tmp/probe.py"', source)
+        self.assertIn('"--mic"', source)
+        self.assertNotIn('"desktop"', source)
+
     def test_it_checks_the_interpreter_before_using_it(self):
         # A bundle that dies from Finder leaves no trace; it has to say something.
         source = macos_desktop.launcher_source("/x/python3")

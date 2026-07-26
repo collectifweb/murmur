@@ -176,7 +176,17 @@ def _c_string(text: str) -> str:
     return f'"{escaped}"'
 
 
-def launcher_source(interpreter: str, mode: str = LAUNCH_EXEC, language: str | None = None) -> str:
+# What the launcher runs. The M7-0 probe passes its own arguments; everything else uses
+# this default, which is the resident server the menu-bar icon and the shortcut live in.
+DEFAULT_ARGS = ("-m", "aparte", "desktop")
+
+
+def launcher_source(
+    interpreter: str,
+    mode: str = LAUNCH_EXEC,
+    language: str | None = None,
+    args: tuple[str, ...] = DEFAULT_ARGS,
+) -> str:
     """The C source of the bundle's main executable.
 
     Kept to one file with no configuration of its own: everything it needs is baked in
@@ -190,9 +200,11 @@ def launcher_source(interpreter: str, mode: str = LAUNCH_EXEC, language: str | N
         raise ValueError(f"unknown launch mode: {mode!r}")
     language = language or _language()
     child = mode == LAUNCH_CHILD
+    baked = "".join(f"    {_c_string(arg)},\n" for arg in args)
     return _LAUNCHER_TEMPLATE.format(
         interpreter=_c_string(interpreter),
         message=_c_string(MISSING_INTERPRETER_MESSAGE[language]),
+        arguments=baked,
         helpers=_CHILD_HELPERS if child else "",
         handover=_CHILD_HANDOVER if child else _EXEC_HANDOVER,
     )
@@ -267,6 +279,11 @@ extern char **environ;
 
 static const char *kInterpreter = {interpreter};
 static const char *kMessage = {message};
+
+/* Baked in at generation time, so the binary is a pure function of this source. */
+static const char *kArguments[] = {{
+{arguments}}};
+static const int kArgumentCount = (int)(sizeof(kArguments) / sizeof(kArguments[0]));
 {helpers}
 /* Say something when the engine is gone. A bundle launched from Finder that just dies
  * leaves nothing behind: no terminal, no message, no way for the user to know why. */
@@ -291,16 +308,16 @@ int main(int argc, char *argv[]) {{
         return 1;
     }}
 
-    /* interpreter -m aparte desktop, plus whatever we were opened with. */
-    char **argv_out = calloc((size_t)argc + 5, sizeof(char *));
+    /* The baked arguments, plus whatever we were opened with. */
+    char **argv_out = calloc((size_t)argc + (size_t)kArgumentCount + 2, sizeof(char *));
     if (argv_out == NULL) {{
         return 1;
     }}
     int n = 0;
     argv_out[n++] = (char *)kInterpreter;
-    argv_out[n++] = "-m";
-    argv_out[n++] = "aparte";
-    argv_out[n++] = "desktop";
+    for (int i = 0; i < kArgumentCount; i++) {{
+        argv_out[n++] = (char *)kArguments[i];
+    }}
     for (int i = 1; i < argc; i++) {{
         argv_out[n++] = argv[i];
     }}
@@ -340,7 +357,8 @@ def codesign_command(bundle: Path) -> list[str]:
 
 
 def write_bundle(destination: Path, interpreter: str, *, mode: str = LAUNCH_EXEC,
-                 language: str | None = None) -> dict[str, Path]:
+                 language: str | None = None,
+                 args: tuple[str, ...] = DEFAULT_ARGS) -> dict[str, Path]:
     """Lay out the bundle's non-compiled parts and the launcher source.
 
     Returns the paths the caller needs to finish the job: compile the source into
@@ -358,7 +376,9 @@ def write_bundle(destination: Path, interpreter: str, *, mode: str = LAUNCH_EXEC
     plist.write_bytes(build_info_plist(language))
 
     source = contents / f"{LAUNCHER_NAME}.c"
-    source.write_text(launcher_source(interpreter, mode=mode, language=language), encoding="utf-8")
+    source.write_text(
+        launcher_source(interpreter, mode=mode, language=language, args=args), encoding="utf-8"
+    )
 
     icon = ASSETS_DIR / ICON_FILE
     installed_icon = resources / ICON_FILE
