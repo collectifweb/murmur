@@ -1192,34 +1192,72 @@ enregistrement alors que le code était correct. **M6 devient prioritaire.**
 **Dette repérée** : `quickmachotkey` est dans l'extra `macos` et n'est jamais
 importé (le pont Carbon est en `ctypes`) — à retirer.
 
-### M7 — l'installation Mac doit être SIMPLE (posé par Alexandre le 25/07)
+### M7 — l'installation macOS (plan écrit le 25/07, **pas commencé**)
 
-**Contrainte de produit, pas de confort.** Les utilisateurs Mac attendent la
-simplicité ; l'installation doit viser **télécharger → glisser dans Applications
-→ ouvrir → accorder deux autorisations**. Rien d'autre.
+**Plan consolidé : `docs/plan-portage-macos-m7.md`.** Second avis de Codex archivé
+dans `docs/archives/avis-codex-m7-empaquetage-2026-07-25.md`.
 
-Ce que M8 a exigé pour tourner est exactement le contraire, et sert de repoussoir :
-Python 3.11 de python.org, archive, environnement virtuel, `pip --prefer-binary`,
-500 Mo de modèle, tout en ligne de commande.
+**Contrainte de produit, pas de confort** (posée par Alexandre le 25/07) :
+**installer → ouvrir → accorder deux autorisations**. Rien d'autre. Ce que M8 a
+exigé pour tourner est le repoussoir : Python 3.11 de python.org, archive,
+environnement virtuel, `pip --prefer-binary`, 500 Mo de modèle, tout en ligne de
+commande.
 
-**Les deux points sont tranchés (Alexandre, 25/07).**
+**Le fait nouveau qui a rouvert la décision de distribution (25/07).** Le cask
+Homebrew sans compte Apple reposait sur « Homebrew retire lui-même la quarantaine ».
+Ce n'est plus vrai : `--no-quarantine` a été **supprimé** (Homebrew 5.1, mars 2026),
+et Homebrew **retire tous les casks qui échouent au contrôle Gatekeeper le
+1er septembre 2026** — leur audit exige signature *et* notarisation. Depuis Sequoia,
+le clic droit → Ouvrir ne suffit même plus. Un cask non signé n'entre plus dans le
+dépôt officiel, et dans un dépôt personnel il installe une application que macOS
+annonce comme endommagée. **Les formulas ne sont pas concernées.**
 
-- **Distribution par Homebrew cask, sans compte développeur Apple.** Homebrew
-  retire lui-même l'attribut de quarantaine à l'installation : Gatekeeper ne bloque
-  pas, sans signature ni 99 USD/an — et sans dépendre d'un Mac qu'on n'a pas pour
-  signer chaque version. Le prix à payer est une ligne de terminal
-  (`brew install --cask aparte`) au lieu du glisser-déposer ; acceptable, le public
-  d'Aparté a déjà Homebrew. Écarté : le DMG non signé (« développeur ne peut pas
-  être vérifié » + clic droit → Ouvrir), qui ruine précisément la promesse de
-  simplicité.
-- **Le modèle se télécharge au premier lancement**, pas embarqué. Le paquet reste
-  léger ; il faut donc un écran d'accueil qui montre la progression et dit
-  clairement qu'Aparté ne dictera qu'à la fin. C'est déjà le comportement actuel,
-  en moins visible — le travail de M7 est de le rendre visible, pas de le changer.
+L'avis de Codex (`.app` + cask) a été rendu **sans ce fait** — il traitait le retrait
+de la quarantaine comme « une bonne hypothèse à tester ». Le reste de son avis est
+repris : le bundle vaut son coût pour les autorisations, et `update.py` ne doit plus
+proposer sa mise à jour in-process sur une installation Homebrew.
 
-Bénéfice de correction qui vient avec le bundle, découvert en M8 : aujourd'hui
-**toutes les autorisations macOS sont accordées à Terminal**, pas à Aparté. Un
-vrai bundle rend le modèle de permissions honnête et lisible.
+**Tranché (Alexandre, 25/07) : formula Homebrew + `.app` construite chez
+l'utilisateur.** Trois faits la portent : une formula n'est pas un cask ; la
+quarantaine est posée par ce qui **télécharge**, donc un bundle assemblé sur place ne
+la reçoit jamais ; et les autorisations macOS suivent l'application **qui lance**,
+donc une `.app` qui démarre Python reçoit les fenêtres à son nom. Aucun compte Apple,
+aucun Mac pour fabriquer les versions, aucune intégration continue macOS.
+
+```
+brew install collectifweb/aparte/aparte
+aparte install-app        → ~/Applications/Aparté.app
+(ouvrir)                  → « Aparté souhaite accéder au micro »
+                          → « Aparté souhaite contrôler cet ordinateur »
+```
+
+**Le modèle se télécharge au premier lancement**, pas embarqué (inchangé) : le paquet
+reste léger, et le travail de M7 est de rendre la progression **visible**, avec une
+phrase qui dit qu'Aparté ne dictera qu'à la fin.
+
+**L'invariant central du lot, et il n'est pas évident : le bundle doit être stable
+octet pour octet d'une version à l'autre.** Une signature ad-hoc n'a pas d'identité
+d'équipe — macOS reconnaît l'application par l'empreinte de son code. Si le bundle
+change, l'empreinte change, et **les autorisations sont oubliées**. Donc la version
+d'Aparté n'entre pas dans le bundle : le lanceur n'est pas Aparté, il a sa propre
+version, fixe.
+
+**Découpage (chaque lot avec ses tests et son commit).**
+
+- [ ] **M7a** — le bundle, sans rien de natif : `macos_desktop.py`, `Info.plist`,
+      lanceur, réécriture `Cellar` → `opt`, test de stabilité octet pour octet.
+- [ ] **M7b** — `aparte.icns` généré depuis `logo.svg` et **commité**, régénération
+      documentée dans `DESIGN.md`.
+- [ ] **M7c** — `aparte install-app`, `desktop_integration()` sur Darwin, signature
+      ad-hoc best-effort, check `doctor` `app_bundle`.
+- [ ] **M7d** — la formula, le dépôt personnel, `README` et doc du parcours Mac.
+- [ ] **M7e** — état `brew` dans `update.py`, libellés du menu et du panneau web.
+- [ ] **M7f** — modèle visible au premier lancement (déclenché par l'application,
+      observé en lecture seule — invariant Darwin).
+- [ ] **M7g** — démarrage à l'ouverture de session, LaunchAgent **via `open -a`**
+      (jamais le lanceur directement, sinon `launchd` redevient responsable).
+      Reportable.
+- [ ] **M7h** — doc : `CLAUDE.md`, `CHANGELOG.md`, ce fichier, `README.md`.
 
 ### M6 — l'icône de barre de menus macOS (livrée et validée sur Mac le 25/07)
 
