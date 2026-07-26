@@ -102,6 +102,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   found two defects, both fixed: `aparte doctor` announced a missing icon while the
   icon was on screen (it runs in another process, and now asks the server), and the
   teardown was silent, making a clean Quit indistinguishable from a killed process.
+- **The macOS application bundle, and its icon (M7a, M7b).** Groundwork for the
+  install: Aparté can now describe an `Aparté.app` — its `Info.plist`, a launcher
+  compiled on the spot from generated C, and the icon — and the pieces are covered
+  by tests, but **nothing installs it yet**; there is still no `aparte install-app`,
+  and running Aparté on a Mac still means a checkout. The launcher is a real
+  Mach-O program rather than a shell script, because macOS refuses to attribute
+  permissions to a bundle whose main executable is a script — which is why the
+  microphone and Accessibility windows say "Terminal" today instead of "Aparté".
+  The bundle is deliberately **identical from one Aparté version to the next**: an
+  ad-hoc signature has no team identity, so macOS pins the permission to the code's
+  fingerprint, and a bundle that changed would make it forget the permissions
+  *while leaving the checkbox ticked* in System Settings. A test compares two
+  builds made under two different versions. The application icon is derived from
+  the existing mark, redrawn to Apple's grid (824 on a 1024 canvas, transparent
+  margin) and committed as a ready-made `.icns` — no build step for a contributor;
+  `python3 scripts/build-icns.py` regenerates it. Distribution will be a Homebrew
+  **formula**, not a cask: Homebrew removed `--no-quarantine` in 5.1 and removes
+  every cask that fails Gatekeeper on 1 September 2026, and the `.app` being built
+  on your own machine is what keeps it out of quarantine — no Apple account, no
+  Mac needed to publish. What comes next is gated on one native measurement
+  (`.claude/mac-validation/m7/`): whether an `.app` that launches Python really
+  does receive the permission windows under its own name. Linux behaviour is
+  unchanged.
 
 ### Fixed
 

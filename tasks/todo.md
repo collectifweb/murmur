@@ -1192,7 +1192,7 @@ enregistrement alors que le code était correct. **M6 devient prioritaire.**
 **Dette repérée** : `quickmachotkey` est dans l'extra `macos` et n'est jamais
 importé (le pont Carbon est en `ctypes`) — à retirer.
 
-### M7 — l'installation macOS (plan **validé `/confront-codex` le 25/07**, pas commencé)
+### M7 — l'installation macOS (plan **validé `/confront-codex` le 25/07** ; M7a/M7b livrés, **arrêté à la porte M7-0**)
 
 **Plan consolidé : `docs/plan-portage-macos-m7.md`.** Consensus bilatéral en 3 rounds,
 archives `docs/archives/confront-codex-portage-macos-m7-2026-07-25-2303/`. Second avis
@@ -1276,20 +1276,36 @@ deux réponses.
 
 **Découpage (chaque lot avec ses tests et son commit).**
 
-- [ ] **M7-0** — **porte de décision, sur un vrai Mac, avant tout le reste.** Bundle
+- [~] **M7-0** — **porte de décision, sur un vrai Mac, avant tout le reste.**
+      **Outillage prêt (25/07), exécution en attente du Mac** :
+      `.claude/mac-validation/m7/` (trois étapes numérotées, archive vérifiée au
+      SHA-256, questions explicites pour ce qu'aucun journal ne peut voir). Bundle
       sonde, lanceur Mach-O, **deux variantes** (`execve` / enfant surveillé), **les
       deux autorisations** (micro AVFoundation + accessibilité
       `AXIsProcessTrustedWithOptions`), **trois scénarios de signature** : A ad-hoc
       rebuild identique, B ad-hoc rebuild différent à `CFBundleIdentifier` constant
-      (c'est B qui rend le résultat concluant), C certificat local. Isolation par
-      `tccutil reset`. Relevés : nom affiché, entrée Réglages Système, `cdhash`,
-      `codesign -d -r-`, `xattr -lr`. **Si aucune variante ne fait dire « Aparté »,
-      les lots suivants ne commencent pas.**
-- [ ] **M7a** — le lanceur : source C générée, options de compilation verrouillées
+      (c'est B qui rend le résultat concluant), C certificat local — **étape 3 à ne
+      lancer que si B fait tomber les autorisations ou si A n'est pas déterministe**.
+      Isolation par `tccutil reset`. Relevés : nom affiché, entrée Réglages Système,
+      `cdhash`, `codesign -d -r-`, `xattr -lr`. **Si aucune variante ne fait dire
+      « Aparté », les lots suivants ne commencent pas.** Déjà prouvé sous Linux, donc
+      pas à remesurer : les quatre combinaisons compilent sans un avertissement, le
+      scénario B change réellement le binaire, et deux compilations d'un même source
+      donnent un binaire identique à l'octet (avec `gcc` ici ; c'est `clang` que le
+      scénario A confirme).
+- [x] **M7a** — le lanceur : source C générée, options de compilation verrouillées
       (pas de `__DATE__`, cible fixe), `Info.plist`, arborescence, réécriture
-      `Cellar` → `opt`, déterminisme de l'entrée.
-- [ ] **M7b** — `aparte.icns` généré depuis `logo.svg` et **commité**, régénération
-      documentée dans `DESIGN.md`.
+      `Cellar` → `opt`, déterminisme de l'entrée. `src/aparte/macos_desktop.py`,
+      34 tests. **Le C généré est compilé par la suite** (`LauncherCompilesTest`,
+      stderr vide exigée) : la première version appelait `snprintf` sans `<stdio.h>`
+      — un avertissement sous `gcc`, une **erreur** sous un `clang` récent, donc
+      `install-app` aurait échoué sur tout Mac à jour. Aucun test de chaîne ne
+      l'aurait vu.
+- [x] **M7b** — `aparte.icns` généré depuis `logo.svg` et **commité**, régénération
+      documentée dans `DESIGN.md`. Variante `aparte-app.svg` à la grille d'Apple
+      (marque 824 sur un canevas 1024, marge transparente), 11 tailles empaquetées
+      par `scripts/build-icns.py` — outil de mainteneur, pas une étape de
+      construction.
 - [ ] **M7c** — `install-app` (idempotent, `--open`, `--force` qui prévient),
       `uninstall-app`, `desktop_integration()` sur Darwin, `codesign` **obligatoire**
       (code de sortie non nul), checks `doctor`.
@@ -1304,7 +1320,12 @@ deux réponses.
 - [ ] **M7g** — LaunchAgent **via `/usr/bin/open`** (jamais le lanceur directement,
       sinon `launchd` redevient responsable), `RunAtLoad` seul, **pas de `KeepAlive`**,
       chemins absolus, journaux dans `~/Library/Logs/Aparté/`. Reportable.
-- [ ] **M7h** — doc : `CLAUDE.md`, `CHANGELOG.md`, ce fichier, `README.md`.
+- [~] **M7h** — doc : `CLAUDE.md`, `CHANGELOG.md`, ce fichier — faits pour ce qui est
+      livré (§ Installation macOS des invariants, entrée « M7a, M7b » du changelog,
+      cette section). `README.md` **reste inchangé volontairement** : sa phrase « ce
+      qui manque, c'est l'installation » est encore vraie, et annoncer Homebrew avant
+      que M7-0 ait répondu serait promettre au lecteur ce qui n'existe pas. Il se
+      réécrit avec M7d.
 
 ### M6 — l'icône de barre de menus macOS (livrée et validée sur Mac le 25/07)
 

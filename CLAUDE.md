@@ -497,6 +497,66 @@ phrases voisines.
   `pyproject.toml`. Les désynchroniser fait mentir le panneau de mise à jour,
   qui lit `__version__`.
 
+### Installation macOS (M7, `macos_desktop.py`)
+
+Plan : `docs/plan-portage-macos-m7.md`. Ce qui suit est établi ; ce qui attend
+encore la mesure est nommé comme tel à la fin.
+
+- **Distribution par une formula Homebrew, jamais un cask.** Homebrew a supprimé
+  `--no-quarantine` (5.1, mars 2026) et **retire tous les casks qui échouent au
+  contrôle Gatekeeper le 1er septembre 2026** — leur audit exige signature *et*
+  notarisation. Un cask non signé installe une application que macOS annonce
+  comme endommagée. Les formulas ne sont pas concernées. Ne pas rouvrir sans un
+  fait nouveau daté.
+- **La `.app` est construite sur la machine de l'utilisateur, jamais
+  téléchargée.** C'est ce qui la garde hors de la quarantaine : l'attribut est
+  posé par ce qui télécharge, et il n'y a rien à télécharger. Corollaire :
+  aucun compte Apple, aucun Mac pour fabriquer les versions, aucune CI macOS.
+- **L'exécutable principal du bundle est un Mach-O, jamais un script.** Apple
+  DTS (thread 678819) : *« TCC expects its bundled clients … to use a native main
+  executable. … If your product uses a script as its main executable, you're
+  likely to encounter TCC problems. »* C'est tout le bénéfice du lot qui en
+  dépend — sans bundle valide, les fenêtres continuent de dire « Terminal ».
+- **Le bundle ne change pas d'une version d'Aparté à l'autre.** Une signature
+  ad-hoc n'a pas d'identité d'équipe : l'exigence TCC est attachée au `cdhash`.
+  Un bundle qui change fait oublier les autorisations à macOS **en laissant la
+  case cochée** dans les Réglages Système — la panne est donc silencieuse. Donc :
+  ni la version d'Aparté, ni le code Python, ni un chemin qui bouge n'entrent
+  dedans, et le lanceur nomme l'interpréteur par le chemin `opt` que Homebrew
+  garde stable (jamais `Cellar`, qui disparaît au premier `brew upgrade`). Le
+  lanceur porte sa **propre** version, fixe. Un test compare deux constructions
+  faites sous deux `__version__` différents.
+- **La compilation du C généré fait partie des tests.** La première version
+  appelait `snprintf` sans `<stdio.h>` : un avertissement sous `gcc`, une
+  **erreur** sous un `clang` récent — l'installation aurait échoué sur tout Mac à
+  jour, et aucun test de chaîne ne l'aurait vu.
+- **`CFBundleIdentifier` (`ca.collectifweb.aparte`) est définitif.** Le changer
+  après diffusion créerait une seconde application aux yeux de macOS, et
+  l'utilisateur devrait tout réautoriser sans comprendre pourquoi.
+- **`codesign` est un prérequis dur**, jamais best-effort : un bundle mal signé
+  présenté comme installé est pire que pas d'installation, et Apple Silicon
+  refuse d'exécuter du code natif non signé.
+- **La `.app` vit dans `~/Applications`, hors du préfixe Homebrew.** Dedans,
+  `brew upgrade` la reconstruirait — donc un nouveau `cdhash` à chaque version.
+  Le prix, assumé : `brew uninstall` la laisse en place, d'où `aparte
+  uninstall-app` et sa mention dans les caveats.
+- **Le `post_install` d'une formula ne peut pas créer le bundle** : les blocs
+  d'installation sont sandboxés et `HOME` y est remplacé par un répertoire
+  temporaire. D'où un parcours à **deux commandes** (`brew install`, puis
+  `aparte install-app --open`) et non « installer → ouvrir ». Écrit tel quel dans
+  la doc plutôt qu'arrondi.
+- **Un LaunchAgent lance `/usr/bin/open`, jamais le lanceur directement** :
+  exécuter le lanceur ferait de `launchd` le processus responsable et
+  l'attribution TCC repartirait à zéro. `RunAtLoad` seul, **pas de `KeepAlive`**
+  (le job sort tout de suite, il serait relancé en boucle), chemins absolus —
+  `launchd` ne fait pas d'expansion, donc jamais de `~`.
+- **Ce que M7-0 doit encore trancher, et qu'on ne devine pas** : `execv` contre
+  processus enfant surveillé pour le lanceur, et signature ad-hoc contre
+  certificat local auto-signé. Les deux se mesurent
+  (`.claude/mac-validation/m7/`), comme M8 a mesuré le nombre d'événements par
+  appui plutôt que de le supposer. **Tant que M7-0 n'a pas répondu, les lots M7c
+  à M7h ne s'écrivent pas.**
+
 ## Git
 
 - Le remote s'appelle **`Murmur`**, pas `origin`. Ne pas supposer `origin`.
