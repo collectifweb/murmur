@@ -1202,14 +1202,20 @@ Ce que M8 a exigé pour tourner est exactement le contraire, et sert de repousso
 Python 3.11 de python.org, archive, environnement virtuel, `pip --prefer-binary`,
 500 Mo de modèle, tout en ligne de commande.
 
-Deux points à trancher **avant** de concevoir M7 :
+**Les deux points sont tranchés (Alexandre, 25/07).**
 
-- **Signature et notarisation Apple.** Sans elles, Gatekeeper bloque l'application
-  et le contournement (clic droit → Ouvrir) ruine la promesse. Cela suppose un
-  compte développeur Apple payant. **Question ouverte pour Alexandre.**
-- **Le modèle Whisper** (~500 Mo) : embarqué dans le bundle, ou téléchargé au
-  premier lancement avec une barre de progression ? Le premier alourdit le
-  téléchargement, le second demande du réseau à un moment sensible.
+- **Distribution par Homebrew cask, sans compte développeur Apple.** Homebrew
+  retire lui-même l'attribut de quarantaine à l'installation : Gatekeeper ne bloque
+  pas, sans signature ni 99 USD/an — et sans dépendre d'un Mac qu'on n'a pas pour
+  signer chaque version. Le prix à payer est une ligne de terminal
+  (`brew install --cask aparte`) au lieu du glisser-déposer ; acceptable, le public
+  d'Aparté a déjà Homebrew. Écarté : le DMG non signé (« développeur ne peut pas
+  être vérifié » + clic droit → Ouvrir), qui ruine précisément la promesse de
+  simplicité.
+- **Le modèle se télécharge au premier lancement**, pas embarqué. Le paquet reste
+  léger ; il faut donc un écran d'accueil qui montre la progression et dit
+  clairement qu'Aparté ne dictera qu'à la fin. C'est déjà le comportement actuel,
+  en moins visible — le travail de M7 est de le rendre visible, pas de le changer.
 
 Bénéfice de correction qui vient avec le bundle, découvert en M8 : aujourd'hui
 **toutes les autorisations macOS sont accordées à Terminal**, pas à Aparté. Un
