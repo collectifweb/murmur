@@ -1,0 +1,271 @@
+"""M7a — the macOS application bundle, proved without a Mac.
+
+Everything here is string and path work, so it runs on the Linux dev machine. What these
+tests cannot prove — that macOS really attributes the permission to the bundle, that
+``codesign`` accepts the result — is measured by the M7-0 probe on a real Mac.
+"""
+
+from __future__ import annotations
+
+import plistlib
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+from aparte import macos_desktop
+
+
+class StableInterpreterTest(unittest.TestCase):
+    """The launcher must name a path that survives ``brew upgrade``."""
+
+    def test_cellar_path_becomes_the_version_stable_opt_path(self):
+        self.assertEqual(
+            macos_desktop.stable_interpreter(
+                "/opt/homebrew/Cellar/aparte/1.1.1/libexec/bin/python3"
+            ),
+            "/opt/homebrew/opt/aparte/libexec/bin/python3",
+        )
+
+    def test_intel_prefix_is_rewritten_too(self):
+        self.assertEqual(
+            macos_desktop.stable_interpreter(
+                "/usr/local/Cellar/aparte/2.0.0/libexec/bin/python3.12"
+            ),
+            "/usr/local/opt/aparte/libexec/bin/python3.12",
+        )
+
+    def test_two_versions_of_the_same_formula_give_the_same_path(self):
+        # The whole point: an upgrade must not change what the launcher names, or the
+        # bundle would have to be rewritten and the granted permissions would be lost.
+        first = macos_desktop.stable_interpreter(
+            "/opt/homebrew/Cellar/aparte/1.1.1/libexec/bin/python3"
+        )
+        second = macos_desktop.stable_interpreter(
+            "/opt/homebrew/Cellar/aparte/9.9.9/libexec/bin/python3"
+        )
+        self.assertEqual(first, second)
+
+    def test_a_plain_virtualenv_is_left_alone(self):
+        path = "/home/alexandre/Apps-coding/Murmur/.venv/bin/python3"
+        self.assertEqual(macos_desktop.stable_interpreter(path), path)
+
+    def test_a_system_interpreter_is_left_alone(self):
+        self.assertEqual(macos_desktop.stable_interpreter("/usr/bin/python3"), "/usr/bin/python3")
+
+    def test_a_truncated_cellar_path_is_left_alone(self):
+        # Nothing to rewrite and nothing to guess: better untouched than mangled.
+        path = "/opt/homebrew/Cellar/aparte"
+        self.assertEqual(macos_desktop.stable_interpreter(path), path)
+
+
+class InfoPlistTest(unittest.TestCase):
+    def setUp(self):
+        self.document = plistlib.loads(macos_desktop.build_info_plist("fr"))
+
+    def test_identity_keys(self):
+        self.assertEqual(self.document["CFBundleIdentifier"], "ca.collectifweb.aparte")
+        self.assertEqual(self.document["CFBundleName"], "Aparté")
+        self.assertEqual(self.document["CFBundleExecutable"], macos_desktop.LAUNCHER_NAME)
+        self.assertEqual(self.document["CFBundlePackageType"], "APPL")
+
+    def test_no_dock_icon(self):
+        # Aparté is a menu-bar resident (M6), not a windowed application.
+        self.assertIs(self.document["LSUIElement"], True)
+
+    def test_microphone_reason_is_present_and_localised(self):
+        # Without this key macOS kills the process instead of asking.
+        self.assertIn("Aparté", self.document["NSMicrophoneUsageDescription"])
+        english = plistlib.loads(macos_desktop.build_info_plist("en"))
+        self.assertNotEqual(
+            english["NSMicrophoneUsageDescription"],
+            self.document["NSMicrophoneUsageDescription"],
+        )
+
+    def test_the_version_is_the_launchers_not_apartes(self):
+        # The bundle must not move when Aparté is released, or the cdhash changes and
+        # macOS forgets every granted permission — silently, checkbox still ticked.
+        from aparte import __version__
+
+        self.assertEqual(
+            self.document["CFBundleShortVersionString"], macos_desktop.LAUNCHER_VERSION
+        )
+        self.assertNotIn(__version__, macos_desktop.build_info_plist("fr").decode("utf-8"))
+
+
+class LauncherSourceTest(unittest.TestCase):
+    def test_it_names_the_interpreter_it_was_given(self):
+        source = macos_desktop.launcher_source("/opt/homebrew/opt/aparte/libexec/bin/python3")
+        self.assertIn('"/opt/homebrew/opt/aparte/libexec/bin/python3"', source)
+
+    def test_it_launches_the_desktop_server(self):
+        source = macos_desktop.launcher_source("/x/python3")
+        self.assertIn('"-m"', source)
+        self.assertIn('"aparte"', source)
+        self.assertIn('"desktop"', source)
+
+    def test_it_checks_the_interpreter_before_using_it(self):
+        # A bundle that dies from Finder leaves no trace; it has to say something.
+        source = macos_desktop.launcher_source("/x/python3")
+        self.assertIn("stat(kInterpreter", source)
+        self.assertIn("show_error", source)
+        self.assertIn("osascript", source)
+
+    def test_exec_mode_replaces_the_process(self):
+        source = macos_desktop.launcher_source("/x/python3", mode=macos_desktop.LAUNCH_EXEC)
+        self.assertIn("execv(kInterpreter", source)
+        self.assertNotIn("waitpid(child", source)
+
+    def test_child_mode_keeps_the_bundle_executable_alive(self):
+        source = macos_desktop.launcher_source("/x/python3", mode=macos_desktop.LAUNCH_CHILD)
+        self.assertIn("posix_spawn(&child", source)
+        self.assertIn("waitpid(child", source)
+        # Signals have to reach Python, or "Quit" would leave a recorder running.
+        self.assertIn("forward_signal", source)
+
+    def test_an_unknown_mode_is_refused(self):
+        with self.assertRaises(ValueError):
+            macos_desktop.launcher_source("/x/python3", mode="magic")
+
+    def test_it_carries_nothing_that_varies_with_the_clock(self):
+        # __DATE__/__TIME__ would make every compile produce a different binary, hence a
+        # different cdhash, hence permissions lost on any reinstall.
+        source = macos_desktop.launcher_source("/x/python3")
+        self.assertNotIn("__DATE__", source)
+        self.assertNotIn("__TIME__", source)
+
+    def test_a_quote_in_the_path_cannot_break_out_of_the_literal(self):
+        source = macos_desktop.launcher_source('/x/we"ird/python3')
+        self.assertIn(r'"/x/we\"ird/python3"', source)
+
+
+@unittest.skipIf(shutil.which("cc") is None, "no C compiler on this machine")
+class LauncherCompilesTest(unittest.TestCase):
+    """The generated C must actually compile — a string test cannot see a missing header.
+
+    Written after the first version shipped a ``snprintf`` call without ``<stdio.h>``:
+    an implicit function declaration, which recent clang treats as an **error**, so
+    ``aparte install-app`` would have failed on any current Mac. Compiled here with the
+    local compiler, which proves the syntax and the includes; the macOS-specific
+    behaviour is still M7-0's job.
+    """
+
+    def setUp(self):
+        self._temp = tempfile.TemporaryDirectory()
+        self.root = Path(self._temp.name)
+        self.addCleanup(self._temp.cleanup)
+
+    def _compile(self, mode: str) -> subprocess.CompletedProcess:
+        source = self.root / f"launcher-{mode}.c"
+        source.write_text(
+            macos_desktop.launcher_source("/opt/homebrew/opt/aparte/libexec/bin/python3",
+                                          mode=mode, language="fr"),
+            encoding="utf-8",
+        )
+        return subprocess.run(
+            ["cc", "-O2", "-g0", "-fno-common", "-Wall", "-Wextra",
+             "-o", str(self.root / mode), str(source)],
+            capture_output=True,
+            text=True,
+        )
+
+    def test_exec_variant_compiles_without_warnings(self):
+        result = self._compile(macos_desktop.LAUNCH_EXEC)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr.strip(), "", result.stderr)
+
+    def test_child_variant_compiles_without_warnings(self):
+        result = self._compile(macos_desktop.LAUNCH_CHILD)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr.strip(), "", result.stderr)
+
+
+class CompileCommandTest(unittest.TestCase):
+    def test_options_are_fixed_and_carry_no_debug_paths(self):
+        command = macos_desktop.clang_command(Path("/tmp/a.c"), Path("/tmp/a"))
+        self.assertEqual(command[0], "clang")
+        self.assertIn("-g0", command)  # debug info would embed temporary paths
+        self.assertIn("-O2", command)
+        self.assertIn(f"-mmacosx-version-min={macos_desktop.MACOSX_DEPLOYMENT_TARGET}", command)
+
+    def test_deployment_target_is_pinned_not_inherited(self):
+        # Inheriting the SDK default would make the binary depend on the machine's Xcode.
+        self.assertTrue(
+            any(part.startswith("-mmacosx-version-min=") for part in macos_desktop.CLANG_OPTIONS)
+        )
+
+    def test_signing_is_ad_hoc_with_a_pinned_identifier(self):
+        command = macos_desktop.codesign_command(Path("/x/Aparté.app"))
+        self.assertEqual(command[0], "codesign")
+        self.assertIn("--sign", command)
+        self.assertIn("-", command)
+        self.assertIn("--identifier", command)
+        self.assertIn(macos_desktop.BUNDLE_IDENTIFIER, command)
+
+
+class WriteBundleTest(unittest.TestCase):
+    def setUp(self):
+        self._temp = tempfile.TemporaryDirectory()
+        self.root = Path(self._temp.name)
+        self.addCleanup(self._temp.cleanup)
+
+    def _write(self, destination: Path) -> dict[str, Path]:
+        return macos_desktop.write_bundle(
+            destination, "/opt/homebrew/opt/aparte/libexec/bin/python3", language="fr"
+        )
+
+    def test_it_lays_out_the_expected_tree(self):
+        paths = self._write(self.root / "Aparté.app")
+        self.assertTrue(paths["plist"].is_file())
+        self.assertTrue(paths["source"].is_file())
+        self.assertEqual(paths["executable"].parent.name, "MacOS")
+        self.assertEqual(paths["plist"].parent.name, "Contents")
+
+    def test_the_bundle_is_byte_identical_across_two_apparte_versions(self):
+        # The invariant the whole lot rests on. If this ever fails, macOS forgets the
+        # granted permissions on upgrade — and says nothing, because the checkbox in
+        # System Settings stays ticked.
+        import aparte
+
+        first = self.root / "first.app"
+        self._write(first)
+        original = aparte.__version__
+        try:
+            aparte.__version__ = "99.99.99"
+            second = self.root / "second.app"
+            self._write(second)
+        finally:
+            aparte.__version__ = original
+
+        for name in ("Contents/Info.plist", "Contents/aparte.c"):
+            self.assertEqual(
+                (first / name).read_bytes(),
+                (second / name).read_bytes(),
+                f"{name} changed with the Aparté version",
+            )
+
+    def test_writing_twice_over_itself_is_stable(self):
+        # install-app is idempotent, so a repair must not churn the bundle.
+        destination = self.root / "Aparté.app"
+        self._write(destination)
+        before = (destination / "Contents" / "Info.plist").read_bytes()
+        self._write(destination)
+        self.assertEqual(before, (destination / "Contents" / "Info.plist").read_bytes())
+
+    def test_a_missing_icon_does_not_stop_the_bundle(self):
+        # The .icns lands in M7b; until then the bundle still has to be buildable.
+        paths = self._write(self.root / "Aparté.app")
+        self.assertTrue(paths["icon"].parent.is_dir())
+
+
+class ApplicationsDirTest(unittest.TestCase):
+    def test_the_bundle_lives_outside_the_homebrew_prefix(self):
+        # Inside the prefix, brew upgrade would rebuild it — a new cdhash every release.
+        self.assertEqual(macos_desktop.applications_dir().name, "Applications")
+        self.assertEqual(macos_desktop.bundle_path().name, macos_desktop.BUNDLE_NAME)
+        self.assertNotIn("Cellar", str(macos_desktop.bundle_path()))
+
+
+if __name__ == "__main__":
+    unittest.main()
