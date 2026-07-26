@@ -548,6 +548,45 @@ inkscape --export-type=png --export-filename=aparte-menubar.png \
 `tests/test_macos_tray.py` vérifie ensuite les dimensions, l'absence de pixel coloré,
 qu'aucune des deux icônes n'est vide, et l'écart de masse d'encre entre les deux.
 
+### Icône d'application macOS
+
+L'autre icône macOS, et son contraire : celle-ci **est** le carré carmin. La phrase
+ci-dessus le dit déjà — « le carré carmin du logo appartient au lanceur » — et une
+application de bureau *est* un lanceur. `aparte-app.svg` reprend donc `logo.svg` sans
+rien redessiner.
+
+**Ce qui change, c'est l'échelle.** macOS attend une marque de 824 points sur un
+canevas de 1024, le reste transparent. La marge n'est pas une coquetterie : c'est
+elle qui aligne optiquement toutes les icônes du Dock et de la liste des Réglages
+Système. `logo.svg` remplit 93,75 % de son canevas ; posé tel quel, Aparté serait
+visiblement plus grosse que ses voisines, et une icône qui dépasse se lit « pas une
+vraie application Mac » — précisément là où M7 essaie de rendre le modèle
+d'autorisations crédible, dans Confidentialité et sécurité, à côté du nom « Aparté ».
+
+D'où une seule transformation, `translate(72.5333) scale(1.7166667)`, qui porte le
+carré de 480 à 824 et le centre. Le rayon suit (112 → 192) et **garde la proportion
+de la marque**, 23,3 %, au lieu des 22,5 % d'Apple : l'écart vaut moins d'un point à
+cette taille, et la forme appartient au projet.
+
+**Aucune ombre portée incrustée**, bien que les gabarits d'Apple en proposent une.
+Elle dépend du fond où le système pose l'icône, et une ombre figée au mauvais endroit
+est pire que pas d'ombre. La règle « aucun dégradé nulle part » vaut aussi ici.
+
+Le `.icns` est **commité**, comme les PNG de la barre de menus : un contributeur n'a
+aucune étape de fabrication à passer. Il s'assemble sur Linux — `iconutil` et `sips`
+sont des outils macOS, et il n'y a pas de Mac ici :
+
+```bash
+python3 scripts/build-icns.py
+```
+
+Le script rasterise le SVG à onze tailles et les empile dans le conteneur `.icns`
+(un mot magique, la longueur totale, puis un PNG préfixé de sa longueur par
+emplacement). Les emplacements Retina **et** non-Retina sont remplis : macOS choisit
+par emplacement, jamais en mesurant, donc un `@2x` absent fait agrandir une image plus
+petite. `tests/test_macos_desktop.py` vérifie la longueur déclarée, que chaque
+emplacement porte bien un PNG carré, et que la marge d'Apple est respectée.
+
 ### Motion
 
 150 à 250 ms sur les transitions d'état, courbe `cubic-bezier(0.16, 1, 0.3, 1)`.

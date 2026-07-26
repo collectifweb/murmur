@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import plistlib
 import shutil
+import struct
 import subprocess
 import tempfile
 import unittest
@@ -257,6 +258,59 @@ class WriteBundleTest(unittest.TestCase):
         # The .icns lands in M7b; until then the bundle still has to be buildable.
         paths = self._write(self.root / "Aparté.app")
         self.assertTrue(paths["icon"].parent.is_dir())
+
+
+class IconTest(unittest.TestCase):
+    """The committed ``.icns`` — a contributor must never have to build it.
+
+    Assembled on Linux by ``scripts/build-icns.py`` because ``iconutil`` and ``sips``
+    are macOS tools and there is no Mac here. The container is simple enough to check
+    by hand: a magic word, a total length, then one length-prefixed PNG per slot.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.path = macos_desktop.ASSETS_DIR / macos_desktop.ICON_FILE
+        cls.data = cls.path.read_bytes() if cls.path.exists() else b""
+
+    def _slots(self):
+        offset, found = 8, {}
+        while offset < len(self.data):
+            ostype, length = struct.unpack(">4sI", self.data[offset : offset + 8])
+            payload = self.data[offset + 8 : offset + length]
+            found[ostype.decode("ascii")] = payload
+            offset += length
+        return found
+
+    def test_it_is_committed(self):
+        self.assertTrue(self.path.is_file(), f"{self.path} is missing — run scripts/build-icns.py")
+
+    def test_header_declares_the_real_length(self):
+        # A wrong length is the one corruption macOS refuses silently: no icon, no error.
+        magic, total = struct.unpack(">4sI", self.data[:8])
+        self.assertEqual(magic, b"icns")
+        self.assertEqual(total, len(self.data))
+
+    def test_every_slot_holds_a_png_of_the_declared_size(self):
+        for ostype, payload in self._slots().items():
+            self.assertEqual(payload[:4], b"\x89PNG", f"{ostype} is not a PNG")
+            width, height = struct.unpack(">II", payload[16:24])
+            self.assertEqual(width, height, f"{ostype} is not square")
+
+    def test_both_the_retina_and_non_retina_slots_are_filled(self):
+        # macOS picks by slot, never by measuring: a missing @2x makes Retina upscale.
+        slots = self._slots()
+        for ostype in ("ic07", "ic08", "ic09", "ic10", "ic11", "ic12", "ic13", "ic14"):
+            self.assertIn(ostype, slots)
+
+    def test_the_mark_keeps_apples_margin(self):
+        # 824 of 1024 — the margin is what aligns Aparté optically with every other
+        # icon in the Dock and in the System Settings list. Filling the canvas would
+        # make it visibly bigger than its neighbours, which reads as "not a real Mac
+        # app" exactly where the permission model is supposed to look trustworthy.
+        source = (macos_desktop.ASSETS_DIR / "aparte-app.svg").read_text(encoding="utf-8")
+        self.assertIn('viewBox="0 0 1024 1024"', source)
+        self.assertIn("scale(1.7166667)", source)  # 480 → 824
 
 
 class ApplicationsDirTest(unittest.TestCase):

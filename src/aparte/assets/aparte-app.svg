@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Aparté">
+  <!-- Icône d'application macOS. C'est logo.svg, à l'échelle de la grille d'Apple :
+       la marque occupe 824 points sur un canevas de 1024, centrée, le reste
+       transparent. La marge n'est pas décorative — c'est elle qui aligne
+       optiquement l'icône sur toutes les autres du Dock et de la liste des
+       Réglages Système. Sans elle, Aparté serait visiblement plus grosse que ses
+       voisines, et une icône qui dépasse se lit « pas une vraie application Mac »,
+       exactement l'inverse de ce que ce lanceur cherche à établir.
+
+       Le rayon garde la proportion de la marque (112/480, soit 23,3 %) plutôt que
+       les 22,5 % d'Apple : l'écart vaut moins d'un point à 824, et la forme
+       appartient au projet.
+
+       Aucune ombre portée n'est incrustée : elle dépend du fond où macOS pose
+       l'icône, et une ombre figée au mauvais endroit est pire que pas d'ombre.
+       DESIGN.md dit « aucun dégradé nulle part » ; on reste à plat.
+
+       Régénérer les images : voir DESIGN.md § Icône d'application macOS. -->
+  <g transform="translate(72.5333,72.5333) scale(1.7166667)">
+    <rect x="16" y="16" width="480" height="480" rx="112" fill="#b8245b"/>
+    <g fill="#ffffff">
+      <rect x="118" y="201" width="36" height="110" rx="18"/>
+      <rect x="178" y="161" width="36" height="190" rx="18"/>
+      <rect x="238" y="116" width="36" height="280" rx="18"/>
+      <rect x="298" y="161" width="36" height="190" rx="18"/>
+      <rect x="358" y="201" width="36" height="110" rx="18"/>
+    </g>
+  </g>
+</svg>
