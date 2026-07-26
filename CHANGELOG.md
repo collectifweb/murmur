@@ -150,6 +150,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`aparte doctor` and the download band no longer contradict each other about the
+  speech model.** Each worked out where the model cache lived on its own, and only
+  one of them knew about `HF_HUB_CACHE`. Someone who had moved their cache — no room
+  on the home partition, the usual reason — read "speech model not downloaded" in the
+  setup panel while the band above the editor said it was ready. There is now one
+  answer, read the way huggingface_hub itself reads it.
 - **A silent recording no longer costs two minutes and a page of symbols.** Opening
   the microphone without speaking made Whisper hallucinate in a loop until it hit its
   token limit — two minutes of computation on an Intel Mac, ending in a string of

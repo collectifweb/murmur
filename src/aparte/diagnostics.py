@@ -396,15 +396,24 @@ def _whisper_model_cached(settings: Settings) -> bool:
     needs no network? A filesystem path counts; otherwise look through the
     HuggingFace hub cache (faster-whisper stores models as ``models--org--repo``).
     Cross-platform, only informational — a false negative merely shows the honest
-    "will download once" message."""
+    "will download once" message.
+
+    The cache location comes from :mod:`aparte.model_download`, which reads the
+    environment the way huggingface_hub itself does. Computing it a second time
+    here missed ``HF_HUB_CACHE``: someone who had moved their cache — no room on
+    the home partition is the usual reason — got "model not downloaded" from
+    ``doctor`` while the download band said it was ready. Two screens, one
+    machine, opposite answers."""
     from pathlib import Path
+
+    from .model_download import cache_root
 
     model = (settings.model or "").strip()
     if not model:
         return False
     if Path(model).expanduser().exists():
         return True
-    cache = Path(os.getenv("HF_HOME") or (Path.home() / ".cache" / "huggingface")) / "hub"
+    cache = cache_root()
     if not cache.is_dir():
         return False
     needle = model.lower().replace("/", "--")

@@ -228,6 +228,31 @@ class InterfaceTest(unittest.TestCase):
         self.assertIn("var(--surface-2)", band)
 
 
+class OneCacheForBothScreensTest(unittest.TestCase):
+    """`doctor` and the download band must not contradict each other.
+
+    Each used to work out the cache location on its own, and only one of them knew
+    about ``HF_HUB_CACHE``. Someone who had moved their cache — no room on the home
+    partition, the usual reason — read "model not downloaded" in the setup panel
+    while the band above the editor said it was ready."""
+
+    def test_a_moved_cache_is_found_by_both(self):
+        from aparte import diagnostics
+
+        with tempfile.TemporaryDirectory() as elsewhere:
+            with tempfile.TemporaryDirectory() as empty_home:
+                repo = Path(elsewhere) / "models--Systran--faster-whisper-small"
+                (repo / "snapshots").mkdir(parents=True)
+                env = {"HF_HUB_CACHE": elsewhere, "HF_HOME": "", "HOME": empty_home}
+                with mock.patch.dict(os.environ, env):
+                    settings = Settings(model="small", transcriber="auto")
+                    band_is_ready = (
+                        model_download.repo_dir(model_download.repo_id("small")) / "snapshots"
+                    ).is_dir()
+                    self.assertTrue(band_is_ready)
+                    self.assertTrue(diagnostics._whisper_model_cached(settings))
+
+
 class DownloadTest(unittest.TestCase):
     """The thread's own path: what it publishes when it works, and when it fails."""
 
