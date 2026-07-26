@@ -7,16 +7,25 @@ Côté Linux, pour chaque étape :
 
 ```bash
 cd .claude/mac-validation
-tar czf serve/src.tar.gz -C ../../src aparte   # avant l'étape 1 seulement
-cp m6/etape1.sh serve/step.sh                  # puis etape2.sh, etc.
+tar czf serve/src.tar.gz -C ../../src aparte   # à refaire dès que le code change
+SUM=$(sha256sum serve/src.tar.gz | cut -d' ' -f1)
+sed -e "s/IP-DU-POSTE-LINUX/192.168.2.11/" -e "s/SHA256-DE-L-ARCHIVE/$SUM/" \
+    m6/etape1.sh > serve/step.sh            # puis etape2.sh, etc.
 ```
+
+Les étapes qui ne téléchargent rien (2 et 3) se copient telles quelles ; le `sed`
+sur un fichier sans marqueur ne fait rien, donc la même commande convient à toutes.
 
 L'humain double-clique l'icône du Bureau, attend « Journal envoyé », et on lit
 `logs/step.log`. Ranger ensuite chaque journal dans `../journaux/` sous son nom
 d'étape, comme pour M8.
 
-**Adapter `RELAY=` en tête de `etape1.sh`, `etape4.sh` et `etape5.sh`** (l'IP du poste
-Linux), comme dans `amorce.sh` — ce sont les trois qui téléchargent du code.
+Les trois étapes qui téléchargent du code (1, 4, 5) portent deux marqueurs :
+l'adresse du relais et la **somme de contrôle de l'archive**. Le relais parle en
+clair sur le réseau local, et ce qu'il sert devient le code exécuté sur le Mac :
+sans cette somme, n'importe qui sur le même réseau pourrait faire extraire son
+propre `src.tar.gz`. Une somme qui ne correspond pas arrête l'étape, sans rien
+extraire.
 L'étape 4 recharge `src.tar.gz` avant sa relance, pour vérifier au passage ce que
 l'étape 1 a fait corriger.
 

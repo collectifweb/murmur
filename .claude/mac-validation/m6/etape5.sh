@@ -9,6 +9,23 @@ APP="$HOME/aparte"
 PY="$APP/.venv/bin/python"
 cd "$APP" || exit 1
 
+ARCHIVE_SHA=SHA256-DE-L-ARCHIVE
+
+recuperer_le_code() {
+  # Le relais parle en clair sur le réseau local, et ce qu'il sert ici devient le
+  # code exécuté sur le Mac : la somme de contrôle est ce qui distingue l'archive
+  # fabriquée sur le poste Linux de n'importe quelle autre. Elle est injectée au
+  # moment de servir l'étape, en même temps que l'adresse.
+  curl -fsS --connect-timeout 8 "$RELAY/src.tar.gz" -o src.tar.gz || return 1
+  if ! echo "$ARCHIVE_SHA  src.tar.gz" | shasum -a 256 -c - >/dev/null 2>&1; then
+    echo "SOMME DE CONTRÔLE FAUSSE — archive refusée, rien n'a été extrait."
+    echo "attendue : $ARCHIVE_SHA"
+    echo "reçue    : $(shasum -a 256 src.tar.gz | cut -d" " -f1)"
+    return 2
+  fi
+  tar xzf src.tar.gz -C src && echo "src/aparte mis à jour (somme vérifiée)"
+}
+
 echo "=== Aparté M6 · étape 5 : le repli sans rumps ==="
 
 echo ""
@@ -17,9 +34,11 @@ pkill -f "aparte desktop" 2>/dev/null; sleep 1
 # Le démontage s'annonce maintenant sur sa propre ligne : l'étape 4 ne pouvait pas
 # distinguer « Quitter a tout démonté » de « le processus est mort », les deux ne
 # laissant ni processus ni port pris. La section 7 ci-dessous en fait la preuve.
-curl -fsS --connect-timeout 8 "$RELAY/src.tar.gz" -o src.tar.gz \
-  && tar xzf src.tar.gz -C src && echo "src/aparte mis à jour" \
-  || echo "téléchargement impossible — on continue avec le code en place"
+recuperer_le_code
+case $? in
+  1) echo "téléchargement impossible — on continue avec le code en place" ;;
+  2) echo "étape interrompue : on n'exécute pas une archive qu'on n'a pas reconnue."; exit 1 ;;
+esac
 "$PY" -m pip uninstall -y rumps 2>&1 | tail -2
 "$PY" -c "import rumps" 2>&1 | tail -1
 

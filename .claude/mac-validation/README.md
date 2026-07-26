@@ -40,7 +40,12 @@ la session. Ensuite, tout se fait par double-clic.
 - On lit `logs/step.log`, on écrit l'étape suivante, on recommence.
 
 Pour livrer du code corrigé au Mac : `tar czf serve/src.tar.gz -C src aparte`,
-puis dans l'étape `curl … -o src.tar.gz && tar xzf src.tar.gz -C src`.
+puis dans l'étape `curl … -o src.tar.gz`, **vérifier la somme de contrôle** et
+seulement ensuite `tar xzf src.tar.gz -C src`. Le relais parle en clair sur le
+réseau local et ce qu'il sert devient le code exécuté : la somme est ce qui
+distingue notre archive de celle d'un autre. Les étapes de M6 montrent le patron
+(`m6/etape1.sh`, fonction `recuperer_le_code`), et la somme s'injecte au moment
+de servir, comme l'adresse.
 L'installation est en mode éditable, la correction prend effet au redémarrage du
 serveur.
 

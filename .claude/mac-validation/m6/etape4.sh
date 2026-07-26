@@ -13,6 +13,23 @@ APP="$HOME/aparte"
 PY="$APP/.venv/bin/python"
 cd "$APP" || exit 1
 
+ARCHIVE_SHA=SHA256-DE-L-ARCHIVE
+
+recuperer_le_code() {
+  # Le relais parle en clair sur le réseau local, et ce qu'il sert ici devient le
+  # code exécuté sur le Mac : la somme de contrôle est ce qui distingue l'archive
+  # fabriquée sur le poste Linux de n'importe quelle autre. Elle est injectée au
+  # moment de servir l'étape, en même temps que l'adresse.
+  curl -fsS --connect-timeout 8 "$RELAY/src.tar.gz" -o src.tar.gz || return 1
+  if ! echo "$ARCHIVE_SHA  src.tar.gz" | shasum -a 256 -c - >/dev/null 2>&1; then
+    echo "SOMME DE CONTRÔLE FAUSSE — archive refusée, rien n'a été extrait."
+    echo "attendue : $ARCHIVE_SHA"
+    echo "reçue    : $(shasum -a 256 src.tar.gz | cut -d" " -f1)"
+    return 2
+  fi
+  tar xzf src.tar.gz -C src && echo "src/aparte mis à jour (somme vérifiée)"
+}
+
 port_pris() { lsof -nP -iTCP:8765 -sTCP:LISTEN >/dev/null 2>&1; }
 
 echo "=== Aparté M6 · étape 4 : « Quitter », puis Ctrl-C ==="
@@ -49,11 +66,11 @@ echo "--- 4/6 code corrigé, puis relance pour la seconde sortie ---"
 # La première validation a montré `doctor` annonçant « missing Menu-bar icon ·
 # start Aparté » alors que l'icône était là : il tourne dans un autre processus
 # que le serveur. Il interroge maintenant une route en lecture seule.
-if curl -fsS --connect-timeout 8 "$RELAY/src.tar.gz" -o src.tar.gz; then
-  tar xzf src.tar.gz -C src && echo "src/aparte mis à jour"
-else
-  echo "téléchargement impossible — on continue avec le code en place"
-fi
+recuperer_le_code
+case $? in
+  1) echo "téléchargement impossible — on continue avec le code en place" ;;
+  2) echo "étape interrompue : on n'exécute pas une archive qu'on n'a pas reconnue."; exit 1 ;;
+esac
 nohup "$PY" -m aparte desktop --no-browser > desktop-ctrlc.log 2>&1 < /dev/null &
 SRV=$!
 sleep 6
