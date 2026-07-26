@@ -1302,7 +1302,9 @@ qui est impossible ici : pas de PyObjC sous Linux).
   navigateur — c'est donc `/api/update/check` qui le porte.
 
 **Ce qui reste à prouver sur un vrai Mac** : checklist en fin de
-`docs/plan-portage-macos-m6.md` (outillage prêt, `.claude/mac-validation/README.md`).
+`docs/plan-portage-macos-m6.md`. Les cinq étapes sont écrites et prêtes à servir —
+`.claude/mac-validation/m6/` (montage inchangé, `.claude/mac-validation/README.md`).
+Il manque une seule chose : le Mac et quelqu'un devant.
 Tout ce qui précède est prouvé sous Linux avec des faux — donc l'orchestration, jamais
 le comportement d'AppKit.
 

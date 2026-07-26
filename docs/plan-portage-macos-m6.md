@@ -321,7 +321,8 @@ Chaque lot a ses tests et son commit.
 
 ## Checklist de validation native (reprise courte sur le Mac)
 
-Outillage prêt : `.claude/mac-validation/README.md`.
+Outillage prêt : `.claude/mac-validation/README.md`. Les neuf points ci-dessous
+sont découpés en cinq double-clics dans `.claude/mac-validation/m6/`.
 
 1. L'icône apparaît au lancement, sans vol de focus.
 2. Rendu template correct en barre **claire** et en barre **sombre**.
