@@ -706,6 +706,12 @@ function renderUpdate(data) {
   // phrase d'état porte déjà les deux versions, celle du disque et celle qui tourne.
   if (data.version && data.state !== "restart_required") html += `<div class="diag-detail">${escapeHtml(t("update.version", { version: data.version }))}</div>`;
   if (data.detail) html += `<div class="diag-detail">${escapeHtml(data.detail)}</div>`;
+  // Installation Homebrew : la mise à jour ne part pas d'ici, elle part d'une
+  // commande. Elle s'affiche et se copie, comme les réparations du diagnostic —
+  // « zéro retour au terminal, sans mépriser le terminal ».
+  if (data.command) {
+    html += `<div class="diag-fix"><code>${escapeHtml(data.command)}</code><button data-copy="${escapeHtml(data.command)}">${t("diag.copy")}</button></div>`;
+  }
   if (data.commits && data.commits.length) {
     html += `<ul class="update-commits">${data.commits.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>`;
   }
@@ -723,6 +729,9 @@ function renderUpdate(data) {
     </div></div>`;
 
   box.innerHTML = html;
+  // Ce bloc remplace le contenu que wireCopyButtons avait déjà parcouru : sans
+  // ce second appel, le bouton « Copier » de la commande Homebrew ne ferait rien.
+  wireCopyButtons(box);
   $("#update-check").addEventListener("click", () => loadUpdate(true));
   const apply = $("#update-apply");
   if (apply) apply.addEventListener("click", runUpdate);

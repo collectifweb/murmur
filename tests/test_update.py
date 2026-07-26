@@ -135,6 +135,57 @@ class CheckUpdateTest(UpdateTestCase):
             self.assertEqual(update.check_update(fetch=True)["state"], "manual")
 
 
+class BrewInstallTest(UpdateTestCase):
+    """A Homebrew install is not a checkout, and answering "not a git checkout,
+    update it by hand" to someone who installed exactly as instructed is an absurd
+    answer. The state reads the path, so it is provable off a Mac."""
+
+    def _formula_from(self, path):
+        with mock.patch.object(update, "__file__", path):
+            return update.brew_formula()
+
+    def test_a_cellar_path_names_its_formula(self):
+        self.assertEqual(
+            self._formula_from("/opt/homebrew/Cellar/aparte/1.2.0/libexec/aparte/update.py"),
+            "aparte",
+        )
+
+    def test_the_intel_prefix_works_the_same(self):
+        self.assertEqual(
+            self._formula_from("/usr/local/Cellar/aparte/1.2.0/libexec/aparte/update.py"),
+            "aparte",
+        )
+
+    def test_a_checkout_is_not_a_formula(self):
+        self.assertIsNone(self._formula_from("/home/someone/aparte/src/aparte/update.py"))
+
+    def test_a_truncated_cellar_path_names_nothing_rather_than_guessing(self):
+        self.assertIsNone(self._formula_from("/opt/homebrew/Cellar"))
+
+    def test_the_state_carries_the_command_to_run(self):
+        with mock.patch.object(update, "find_repo", return_value=None):
+            with mock.patch.object(update, "brew_formula", return_value="aparte"):
+                status = update.check_update(fetch=True)
+        self.assertEqual(status["state"], "brew")
+        self.assertEqual(status["command"], "brew upgrade aparte")
+
+    def test_a_plain_copy_stays_manual(self):
+        # The Linux path is untouched: brew sits beside manual, it does not replace it.
+        with mock.patch.object(update, "find_repo", return_value=None):
+            with mock.patch.object(update, "brew_formula", return_value=None):
+                self.assertEqual(update.check_update(fetch=True)["state"], "manual")
+
+    def test_applying_refuses_and_hands_over_the_command(self):
+        # Moving the files ourselves would leave the keg disagreeing with what
+        # Homebrew believes is installed.
+        with mock.patch.object(update, "find_repo", return_value=None):
+            with mock.patch.object(update, "brew_formula", return_value="aparte"):
+                with mock.patch.object(update, "_stream") as stream:
+                    log = list(update.apply_update())
+        stream.assert_not_called()
+        self.assertIn("brew upgrade aparte", log[0])
+
+
 class ApplyUpdateTest(UpdateTestCase):
     def test_refuses_a_checkout_with_local_changes(self):
         with tempfile.TemporaryDirectory() as directory:

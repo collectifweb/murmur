@@ -479,7 +479,7 @@ class UpdateCheckRouteTest(unittest.TestCase):
         i18n = (Path(desktop.__file__).resolve().parent / "assets" / "i18n.js").read_text(
             encoding="utf-8"
         )
-        for key in ('"update.restart_required"', '"update.use_tray"'):
+        for key in ('"update.restart_required"', '"update.use_tray"', '"update.brew"'):
             self.assertEqual(i18n.count(key), 2, key)
 
 

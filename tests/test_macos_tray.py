@@ -403,6 +403,19 @@ class UpdateDecisionTest(unittest.TestCase):
     def test_an_unknown_state_still_says_something(self):
         self.assertTrue(macos_tray.update_after_check({"state": "martian"}, FR).message)
 
+    def test_a_homebrew_install_is_told_the_command(self):
+        # The fallback above would find the sentence but not the command, and the
+        # command is the whole answer for someone who installed with brew.
+        decision = macos_tray.update_after_check(
+            {"state": "brew", "command": "brew upgrade aparte"}, FR
+        )
+        self.assertEqual(decision.mode, macos_tray.UPDATE_CHECK)
+        self.assertIn("brew upgrade aparte", decision.message)
+        english = macos_tray.update_after_check(
+            {"state": "brew", "command": "brew upgrade aparte"}, macos_tray.LABELS["en"]
+        )
+        self.assertIn("brew upgrade aparte", english.message)
+
     def test_an_installed_release_freezes_the_item_on_relaunch(self):
         decision = macos_tray.update_after_check({"state": "restart_required", "release": "v1.2.0"}, FR)
         self.assertEqual(decision.mode, macos_tray.UPDATE_DONE)

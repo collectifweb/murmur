@@ -53,6 +53,22 @@ def find_repo() -> Path | None:
     return None
 
 
+def brew_formula() -> str | None:
+    """The Homebrew formula Aparté runs from, or None when it came another way.
+
+    Homebrew installs a formula into ``<prefix>/Cellar/<formula>/<version>/…``, and
+    that component is the one marker left in this module's own path. Reading the
+    path rather than asking ``brew`` keeps it provable off a Mac — and answers
+    without spawning a process on every check.
+    """
+    parts = Path(__file__).resolve().parts
+    try:
+        cellar = parts.index("Cellar")
+    except ValueError:
+        return None
+    return parts[cellar + 1] if len(parts) > cellar + 1 else None
+
+
 def _git(repo: Path, *args: str, timeout: int = GIT_TIMEOUT) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", "-C", str(repo), *args],
@@ -92,10 +108,10 @@ def _latest_release(repo: Path, upstream_ref: str) -> str | None:
 def check_update(fetch: bool = False) -> dict:
     """Describe what an update would do right now, without doing any of it.
 
-    States: manual (not a checkout), no_upstream, offline, error, current,
-    available, restart_required. `dirty` is reported alongside rather than as a
-    state — the user still wants to see that a release is waiting, even when the
-    checkout is too dirty to move to it.
+    States: brew (installed by Homebrew), manual (not a checkout), no_upstream,
+    offline, error, current, available, restart_required. `dirty` is reported
+    alongside rather than as a state — the user still wants to see that a release
+    is waiting, even when the checkout is too dirty to move to it.
 
     Being ahead of the newest tag reads as `current`, and that is deliberate:
     unreleased commits are work in progress, not an update.
@@ -112,6 +128,16 @@ def check_update(fetch: bool = False) -> dict:
 
     repo = find_repo()
     if repo is None:
+        formula = brew_formula()
+        if formula:
+            # Telling someone who installed exactly as instructed that Aparté
+            # "does not run from a git checkout" is an absurd answer. Homebrew is
+            # the update path here, and it has a command to give.
+            return {
+                "state": "brew",
+                "version": __version__,
+                "command": f"brew upgrade {formula}",
+            }
         return {"state": "manual", "version": __version__}
 
     try:
@@ -221,6 +247,11 @@ def apply_update() -> Iterator[str]:
     if status["state"] == "restart_required":
         # Nothing left to install, and the states below assume a repo and a release.
         yield f"Aparté {status.get('release', '')} is installed — restart to run it."
+        return
+    if status["state"] == "brew":
+        # Nothing to fast-forward: the files belong to Homebrew, and moving them
+        # ourselves would leave the keg disagreeing with what is installed.
+        yield f"Aparté was installed with Homebrew — update it with: {status['command']}"
         return
     if status["state"] == "manual":
         yield "Aparté does not run from a git checkout — update it manually."

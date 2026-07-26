@@ -77,6 +77,7 @@ LABELS = {
         "update_available": "Version {version} disponible. Reclique pour l'installer.",
         "update_dirty": "Le dossier a des modifications non validées.",
         "update_manual": "Aparté ne tourne pas depuis un dépôt git.",
+        "update_brew": "Installé par Homebrew — mets-le à jour avec {command}",
         "update_no_upstream": "La branche ne suit aucune branche distante.",
         "update_offline": "Impossible de joindre le dépôt distant.",
         "update_error": "Lecture du dépôt impossible.",
@@ -106,6 +107,7 @@ LABELS = {
         "update_available": "Version {version} available. Click again to install it.",
         "update_dirty": "The checkout has uncommitted changes.",
         "update_manual": "Aparté does not run from a git checkout.",
+        "update_brew": "Installed with Homebrew — update it with {command}",
         "update_no_upstream": "The branch tracks no remote branch.",
         "update_offline": "Could not reach the remote.",
         "update_error": "Cannot read the checkout.",
@@ -223,6 +225,11 @@ def update_after_check(result: dict, texts: dict[str, str]) -> UpdateDecision:
         return UpdateDecision(UPDATE_CHECK, texts["update_check"], texts["update_dirty"])
     if state == "current":
         message = texts["update_current"].format(version=result.get("version") or "")
+        return UpdateDecision(UPDATE_CHECK, texts["update_check"], message)
+    if state == "brew":
+        # Handled here rather than by the fallback below, which cannot fill in the
+        # command — and the command is the whole answer.
+        message = texts["update_brew"].format(command=result.get("command") or "")
         return UpdateDecision(UPDATE_CHECK, texts["update_check"], message)
     return UpdateDecision(
         UPDATE_CHECK, texts["update_check"], texts.get(f"update_{state}", texts["update_error"])
