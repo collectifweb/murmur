@@ -125,6 +125,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`.claude/mac-validation/m7/`): whether an `.app` that launches Python really
   does receive the permission windows under its own name. Linux behaviour is
   unchanged.
+- **The speech model now downloads in plain sight (M7f).** It has always been
+  fetched on the first dictation; the problem was never the download, it was the
+  silence — a fresh install pressed the button, waited minutes with nothing on
+  screen, and concluded the application was broken. Aparté now fetches it itself
+  as the server comes up and shows a band above the editor: what is happening,
+  how far along, and the plain sentence that it cannot dictate until it's done.
+  The recording disc waits, pale, instead of sitting there dark and inviting.
+  Nothing is invented: the progress is what the cache actually holds, and when
+  the total size cannot be known the band says so rather than showing a made-up
+  percentage. The band also carries the one honest nuance to "nothing leaves your
+  machine" — this is the single moment Aparté touches the network. The
+  application starts the download; the page only watches, over a read-only route.
+  macOS only, where the install is meant to be "open it, grant two permissions":
+  on Linux the install is a checkout whose README already explains the one-time
+  fetch, and spending someone's bandwidth at launch would change behaviour.
+- **A Homebrew install knows how to update itself (M7e).** There is no `.git` in
+  a Homebrew install, so the update state fell back to "manual" and the menu
+  answered "Aparté does not run from a git checkout" to someone who had installed
+  exactly as instructed. There is now a `brew` state carrying the command to run,
+  shown and copyable in the web panel and named in the menu-bar item. It sits
+  beside the existing states rather than replacing any: a checkout keeps its own
+  path, on Linux and on a tester's Mac alike.
 
 ### Fixed
 

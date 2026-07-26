@@ -550,6 +550,34 @@ encore la mesure est nommé comme tel à la fin.
   l'attribution TCC repartirait à zéro. `RunAtLoad` seul, **pas de `KeepAlive`**
   (le job sort tout de suite, il serait relancé en boucle), chemins absolus —
   `launchd` ne fait pas d'expansion, donc jamais de `~`.
+- **Le modèle se télécharge à vue, et c'est l'application qui le déclenche**
+  (`model_download.py`, M7f). Une route qui tirerait 500 Mo serait un effet
+  système déclenchable depuis un navigateur — même critère que le reste de
+  l'invariant Darwin. `GET /api/model-state` **observe** seulement, et rend 404
+  tant que rien n'a été lancé dans ce processus. Trois règles :
+  - **La progression somme tous les blocs du cache, pas seulement les
+    `.incomplete`.** `huggingface_hub` télécharge dans `<sha>.incomplete` puis
+    renomme : ne compter que les incomplets ferait **reculer** la barre à chaque
+    fichier terminé.
+  - **Taille totale inconnue = pas de pourcentage.** La barre passe en
+    indéterminée et perd son `aria-valuenow` ; ce qui reste vrai, le nombre de
+    mégaoctets arrivés, s'affiche quand même. Sous `prefers-reduced-motion` le
+    fragment glissant **disparaît** au lieu de s'immobiliser : arrêté, il se
+    lirait « 30 % téléchargés ».
+  - **Déclenché sur Darwin seulement.** Sous Linux l'installation est un clone
+    dont le README explique déjà cette récupération unique ; télécharger 500 Mo
+    au lancement y serait un changement de comportement.
+  Le fait vit dans la mémoire du processus qui télécharge, comme
+  `macos_tray._BUILD_OUTCOME` : le `doctor` qui tourne à côté garde `model_ready`,
+  lu sur le cache, comme vérité persistante.
+- **Une installation Homebrew n'est pas un clone, et `update.py` le sait**
+  (état `brew`, M7e). Sans lui, le menu répondait « Aparté ne tourne pas depuis
+  un dépôt git » à quelqu'un qui avait installé exactement comme on le lui avait
+  dit. La détection lit le chemin du module (`…/Cellar/<formule>/<version>/…`),
+  pas la sortie de `brew` : prouvable sans Mac, et aucun processus ouvert à
+  chaque vérification. L'état **s'ajoute** à `manual`, il ne le remplace pas — un
+  clone garde son chemin, sous Linux comme sur le Mac d'un testeur — et
+  `apply_update()` refuse de bouger des fichiers qui appartiennent à Homebrew.
 - **Ce que M7-0 doit encore trancher, et qu'on ne devine pas** : `execv` contre
   processus enfant surveillé pour le lanceur, et signature ad-hoc contre
   certificat local auto-signé. Les deux se mesurent

@@ -1192,7 +1192,15 @@ enregistrement alors que le code était correct. **M6 devient prioritaire.**
 **Dette repérée** : `quickmachotkey` est dans l'extra `macos` et n'est jamais
 importé (le pont Carbon est en `ctypes`) — à retirer.
 
-### M7 — l'installation macOS (plan **validé `/confront-codex` le 25/07** ; M7a/M7b livrés, **arrêté à la porte M7-0**)
+### M7 — l'installation macOS (plan **validé `/confront-codex` le 25/07** ; M7a, M7b, M7e, M7f livrés, **le reste attend la porte M7-0**)
+
+**Ce qui a été fait pendant que la porte reste fermée.** M7-0 mesure une seule
+question — une `.app` qui lance Python reçoit-elle les autorisations à son nom ?
+Elle commande M7c (`install-app`), M7d (la formula et ses caveats) et M7g (le
+LaunchAgent), qui n'ont pas de sens si la réponse est non. Elle ne commande ni
+M7e ni M7f : le modèle se télécharge de la même façon quel que soit le verdict, et
+une installation Homebrew doit savoir se mettre à jour dans les deux cas. Ces
+deux-là sont donc livrés, testés, commités. Les trois autres attendent.
 
 **Plan consolidé : `docs/plan-portage-macos-m7.md`.** Consensus bilatéral en 3 rounds,
 archives `docs/archives/confront-codex-portage-macos-m7-2026-07-25-2303/`. Second avis
@@ -1312,20 +1320,31 @@ deux réponses.
 - [ ] **M7d** — la formula : Python épinglé, `portaudio`/`libsndfile`, extras
       `whisper,recording,macos` et **jamais `cuda`**, `brew test`, caveats, dépôt
       personnel, `README` et doc du parcours Mac.
-- [ ] **M7e** — état `brew` dans `update.py`, libellés du menu et du panneau web.
-- [ ] **M7f** — modèle visible au premier lancement : `snapshot_download` déclenché
-      par l'application sur un fil, progression lue en sommant les `.incomplete` du
-      cache, état **indéterminé et honnête** si la taille est inconnue, observé en
-      lecture seule (invariant Darwin).
+- [x] **M7e** — état `brew` dans `update.py`, libellés du menu et du panneau web.
+      Détection par le chemin du module (`…/Cellar/<formule>/<version>/…`), pas par
+      un appel à `brew` : prouvable sans Mac. L'état **s'ajoute** à `manual`.
+      La commande s'affiche et se copie, comme les réparations du diagnostic.
+- [x] **M7f** — modèle visible au premier lancement : `snapshot_download` déclenché
+      par l'application sur un fil, progression lue sur le cache, état
+      **indéterminé et honnête** si la taille est inconnue, observé en lecture
+      seule (`GET /api/model-state`, invariant Darwin). Un écart au plan, assumé :
+      la progression somme **tous** les blocs, pas seulement les `.incomplete` —
+      `huggingface_hub` renomme en fin de fichier, donc ne compter que les
+      incomplets ferait reculer la barre à chaque fichier terminé. Le disque
+      d'enregistrement attend, pâli, tant que le modèle descend : sinon on lance un
+      second téléchargement du même dépôt par-dessus le premier. La bande porte
+      aussi « c'est la seule fois qu'Aparté touche au réseau » (PRODUCT.md § 5).
+      Composant documenté dans `DESIGN.md` (§ Bande d'attente du modèle).
 - [ ] **M7g** — LaunchAgent **via `/usr/bin/open`** (jamais le lanceur directement,
       sinon `launchd` redevient responsable), `RunAtLoad` seul, **pas de `KeepAlive`**,
       chemins absolus, journaux dans `~/Library/Logs/Aparté/`. Reportable.
-- [~] **M7h** — doc : `CLAUDE.md`, `CHANGELOG.md`, ce fichier — faits pour ce qui est
-      livré (§ Installation macOS des invariants, entrée « M7a, M7b » du changelog,
-      cette section). `README.md` **reste inchangé volontairement** : sa phrase « ce
-      qui manque, c'est l'installation » est encore vraie, et annoncer Homebrew avant
-      que M7-0 ait répondu serait promettre au lecteur ce qui n'existe pas. Il se
-      réécrit avec M7d.
+- [~] **M7h** — doc : `CLAUDE.md`, `CHANGELOG.md`, `DESIGN.md`, ce fichier — faits
+      pour ce qui est livré (§ Installation macOS des invariants, entrées M7a/M7b,
+      M7e et M7f du changelog, § Bande d'attente du modèle, cette section).
+      `README.md` **reste inchangé volontairement** : sa phrase « ce qui manque,
+      c'est l'installation » est encore vraie, et annoncer Homebrew avant que M7-0
+      ait répondu serait promettre au lecteur ce qui n'existe pas. Il se réécrit
+      avec M7d.
 
 ### M6 — l'icône de barre de menus macOS (livrée et validée sur Mac le 25/07)
 
