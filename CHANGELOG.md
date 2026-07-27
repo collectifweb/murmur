@@ -7,7 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **A recorder Aparté forgot no longer blocks the microphone for five minutes.**
+  Four times in four days, an `arecord` stayed alive with no session file
+  referencing it — twice on 24/07, then on 25/07 and 27/07, each time leaving a
+  9,600,044-byte capture, exactly 300 s, the ceiling. The configured microphone
+  is opened for exclusive access (`-D plughw:`), so that leftover made every
+  subsequent press fail until the ceiling released it, while the error blamed
+  "another application" — the application was Aparté. Starting a dictation now
+  sweeps `/proc` for our own forgotten recorders, recognised by the runtime
+  directory and the `toggle-<timestamp>.wav` name only we produce, and stops them
+  first. Recorders younger than two seconds are spared: a concurrent press may
+  still be publishing its session. Their `.wav` is left on disk — it carries
+  someone's voice, and `/run` empties at logout.
+
+  The 25/07 fix (announcing a dictation only once the microphone is really
+  captured) was already installed when the 27/07 leftover appeared, so it did not
+  close this hole; the exact cause of the orphaning is still not established, and
+  a double press was ruled out over ten runs at five intervals. This sweep makes
+  the failure harmless whatever its origin.
+
+- **The start failure no longer accuses a third party when the culprit was us.**
+  Right after closing one of our own leftovers, the message now says so, instead
+  of sending you to look for the fault where it is not.
 
 ## [1.1.2] - 2026-07-25
 

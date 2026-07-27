@@ -185,6 +185,26 @@ phrases voisines.
 - **Ce qui reste ouvert, et qu'il ne faut pas prétendre fermé** : un lanceur tué
   entre `Popen()` et son nettoyage peut encore laisser un `arecord` sans
   session. Le plafond `-d` borne ce résidu, il ne le rend pas transcrivable.
+  **Ce résidu s'est produit quatre fois en quatre jours** (24/07 ×2, 25/07,
+  27/07), chaque fois une capture de 9 600 044 octets — 300 s pile. Le micro
+  étant ouvert en accès exclusif (`-D plughw:`), il refusait toute dictée
+  jusqu'au plafond, en accusant « une autre application » : c'était Aparté. La
+  cause exacte **n'est toujours pas établie** — le double appui a été écarté (dix
+  essais, cinq intervalles), et le correctif du 25/07 (`_capture_confirmed`)
+  était déjà installé le 27/07. Ne pas écrire qu'on l'a trouvée.
+- **`_reap_forgotten_recorders()` ramasse ce résidu au démarrage d'une dictée**,
+  et c'est ce qui rend la panne sans conséquence sans qu'on en connaisse
+  l'origine. Trois règles :
+  - Il ne tourne **que** faute de session active. Ce qu'une session suit encore
+    est la dictée en cours, pas un oubli — et `cli.py` l'arrête, il ne redémarre
+    pas.
+  - **Deux secondes de grâce**, mesurées sur l'horodatage du nom du fichier. Un
+    appui concurrent peut être entre son `Popen()` et son `_claim_session()` :
+    son enregistreur a quelques centièmes de seconde et ne doit pas être tué.
+  - **Le `.wav` reste sur le disque.** Il porte de la voix, et `/run` se vide à
+    la déconnexion. Reconnaissance par le dossier d'exécution **et** le nom
+    `toggle-<horodatage>.wav` : sans ce filtre, un `SIGINT` partirait vers
+    l'`arecord` de n'importe qui.
 
 ### Typographie
 

@@ -41,6 +41,12 @@ MIN_TRANSCRIBABLE_SECONDS = 0.3
 _START_CONFIRMATION_SECONDS = 0.75
 _START_POLL_SECONDS = 0.02
 
+# En dessous, un enregistreur n'est pas encore un oubli : un appui concurrent peut
+# être en train de publier sa session. Au-delà, plus personne ne viendra le faire.
+_ORPHAN_GRACE_SECONDS = 2.0
+# Ce qu'on laisse à un enregistreur ramassé pour rendre le micro.
+_ORPHAN_EXIT_SECONDS = 1.0
+
 
 def get_runtime_dir() -> Path:
     override = os.getenv("APARTE_RUNTIME_DIR")
@@ -209,6 +215,71 @@ def _capture_confirmed(session: RecordingSession) -> bool:
         time.sleep(_START_POLL_SECONDS)
 
 
+def _forgotten_recorders() -> list[tuple[int, Path]]:
+    """Nos `arecord` vivants que plus aucune session ne suit.
+
+    Reconnus sur ce qu'ils écrivent : notre dossier d'exécution, et le nom
+    `toggle-<horodatage>.wav` que nous seuls produisons. L'horodatage donne leur
+    âge sans consulter `/proc/<pid>/stat` et ses jiffies.
+    """
+    prefix = os.fsencode(get_runtime_dir() / "toggle-")
+    cutoff = time.time() - _ORPHAN_GRACE_SECONDS
+    forgotten: list[tuple[int, Path]] = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            cmdline = (entry / "cmdline").read_bytes()
+        except OSError:
+            continue  # sorti entre l'énumération et la lecture
+        if b"arecord" not in cmdline or prefix not in cmdline:
+            continue
+        audio_path = Path(os.fsdecode(cmdline.rstrip(b"\x00").rsplit(b"\x00", 1)[-1]))
+        try:
+            started_at = int(audio_path.stem.rsplit("-", 1)[-1]) / 1000
+        except ValueError:
+            continue
+        if started_at <= cutoff:
+            forgotten.append((int(entry.name), audio_path))
+    return forgotten
+
+
+def _reap_forgotten_recorders() -> int:
+    """Arrêter les enregistreurs que plus aucune session ne suit. Rend leur nombre.
+
+    Quatre fois en quatre jours, un `arecord` est resté vivant sans session, et le
+    journal du raccourci n'en garde aucune trace : la cause exacte n'est pas
+    établie. Le micro configuré étant ouvert en accès exclusif (`-D plughw:`), ce
+    résidu refusait toute dictée jusqu'à son plafond de cinq minutes, en accusant
+    « une autre application ». Le ramasser rend la panne sans conséquence, quelle
+    qu'en soit l'origine — et c'est la seule protection qui vaille aussi pour les
+    variantes qu'on n'a pas encore vues.
+
+    Appelé seulement quand aucune session n'est active : ce qu'une session suit
+    encore n'est pas un oubli, c'est la dictée en cours.
+    """
+    forgotten = _forgotten_recorders()
+    if not forgotten:
+        return 0
+    for pid, _ in forgotten:
+        try:
+            # Le PID seul, pas son groupe : on vise un processus qu'on vient
+            # d'identifier par sa ligne de commande, rien de ce qui l'entoure.
+            # SIGINT comme `_stop_recorder`, pour qu'il finalise son en-tête.
+            os.kill(pid, signal.SIGINT)
+        except OSError:
+            continue
+    # Le fichier reste : il porte de la voix, et `/run` se vide à la déconnexion.
+    # Attendre qu'ils rendent le micro, sinon le `Popen` juste derrière le
+    # retrouve occupé et échoue sur le résidu qu'on vient de fermer.
+    deadline = time.monotonic() + _ORPHAN_EXIT_SECONDS
+    while time.monotonic() < deadline:
+        if not any(Path(f"/proc/{pid}").exists() for pid, _ in forgotten):
+            break
+        time.sleep(_START_POLL_SECONDS)
+    return len(forgotten)
+
+
 def start_toggle_recording(
     sample_rate: int = 16000,
     device: str | None = None,
@@ -220,6 +291,7 @@ def start_toggle_recording(
     if not executable:
         raise RecordingError("Toggle recording requires arecord from alsa-utils.")
     _clear_stale_temporaries()
+    reaped = _reap_forgotten_recorders()
 
     audio_path = get_runtime_dir() / f"toggle-{int(time.time() * 1000)}.wav"
     command = [
@@ -265,8 +337,14 @@ def start_toggle_recording(
         # jette : c'est ici, et seulement ici, qu'il peut devenir visible.
         get_session_path().unlink(missing_ok=True)
         audio_path.unlink(missing_ok=True)
+        # Quatre fois sur quatre, l'application qui tenait le micro était Aparté.
+        # Accuser un tiers quand on vient soi-même de fermer un résidu envoie
+        # chercher la panne à l'endroit où elle n'est pas.
         raise RecordingError(
-            "Could not start recording. Another application may be holding the microphone."
+            "Could not start recording: the microphone was still busy just after "
+            "closing a recorder Aparté had left open."
+            if reaped
+            else "Could not start recording. Another application may be holding the microphone."
         )
     return session
 
