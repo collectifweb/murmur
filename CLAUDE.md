@@ -188,6 +188,18 @@ phrases voisines.
   processus de quelqu'un d'autre, et `killpg` enverrait un `SIGINT` à tout son
   groupe. Deux signatures : `arecord`, et le chemin du fichier — unique par
   session.
+- **Un démarrage s'annonce quand la capture est prouvée, pas quand `Popen` rend
+  la main.** `Popen` revient dès l'`exec` — 0,001 s mesuré — alors qu'un
+  `-D plughw:` déjà tenu par une autre application ne fait sortir `arecord` qu'à
+  0,02-0,05 s, et que le premier échantillon n'arrive qu'à 0,17 s. Contrôler la
+  vivacité tout de suite annonçait donc « Dictée en cours » à un enregistreur
+  déjà mort ; l'appui censé arrêter ne trouvait plus de session et **rouvrait le
+  micro pour un enregistrement entier**, que plus rien n'arrêtait. Deux captures
+  de 300 s, avec la voix de l'utilisateur dedans, ont été perdues comme ça le
+  24/07. `_capture_confirmed()` attend le premier échantillon écrit, ou la mort du
+  processus ; encore vivant au bout du délai, il garde le bénéfice du doute — un
+  micro lent vaut mieux qu'une dictée refusée. Et l'échec **se notifie** depuis
+  `toggle_dictation` : `main()` n'écrit que sur `stderr`, que Cinnamon jette.
 - **Processus mort + audio ≥ 0,3 s = session à transcrire, pas session
   périmée.** Supprimer ce `.wav` détruirait l'enregistrement à la seconde même
   où l'utilisateur appuie pour le récupérer.
@@ -200,6 +212,26 @@ phrases voisines.
 - **Ce qui reste ouvert, et qu'il ne faut pas prétendre fermé** : un lanceur tué
   entre `Popen()` et son nettoyage peut encore laisser un `arecord` sans
   session. Le plafond `-d` borne ce résidu, il ne le rend pas transcrivable.
+  **Ce résidu s'est produit quatre fois en quatre jours** (24/07 ×2, 25/07,
+  27/07), chaque fois une capture de 9 600 044 octets — 300 s pile. Le micro
+  étant ouvert en accès exclusif (`-D plughw:`), il refusait toute dictée
+  jusqu'au plafond, en accusant « une autre application » : c'était Aparté. La
+  cause exacte **n'est toujours pas établie** — le double appui a été écarté (dix
+  essais, cinq intervalles), et le correctif du 25/07 (`_capture_confirmed`)
+  était déjà installé le 27/07. Ne pas écrire qu'on l'a trouvée.
+- **`_reap_forgotten_recorders()` ramasse ce résidu au démarrage d'une dictée**,
+  et c'est ce qui rend la panne sans conséquence sans qu'on en connaisse
+  l'origine. Trois règles :
+  - Il ne tourne **que** faute de session active. Ce qu'une session suit encore
+    est la dictée en cours, pas un oubli — et `cli.py` l'arrête, il ne redémarre
+    pas.
+  - **Deux secondes de grâce**, mesurées sur l'horodatage du nom du fichier. Un
+    appui concurrent peut être entre son `Popen()` et son `_claim_session()` :
+    son enregistreur a quelques centièmes de seconde et ne doit pas être tué.
+  - **Le `.wav` reste sur le disque.** Il porte de la voix, et `/run` se vide à
+    la déconnexion. Reconnaissance par le dossier d'exécution **et** le nom
+    `toggle-<horodatage>.wav` : sans ce filtre, un `SIGINT` partirait vers
+    l'`arecord` de n'importe qui.
 
 ### Typographie
 

@@ -179,6 +179,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   typography, insertion into other apps, and the fast-double-press guard were
   verified on the machine and behave exactly as designed.
 
+## [1.1.3] - 2026-07-27
+
+### Fixed
+
+- **A recorder Aparté forgot no longer blocks the microphone for five minutes.**
+  Four times in four days, an `arecord` stayed alive with no session file
+  referencing it — twice on 24/07, then on 25/07 and 27/07, each time leaving a
+  9,600,044-byte capture, exactly 300 s, the ceiling. The configured microphone
+  is opened for exclusive access (`-D plughw:`), so that leftover made every
+  subsequent press fail until the ceiling released it, while the error blamed
+  "another application" — the application was Aparté. Starting a dictation now
+  sweeps `/proc` for our own forgotten recorders, recognised by the runtime
+  directory and the `toggle-<timestamp>.wav` name only we produce, and stops them
+  first. Recorders younger than two seconds are spared: a concurrent press may
+  still be publishing its session. Their `.wav` is left on disk — it carries
+  someone's voice, and `/run` empties at logout.
+
+  The 25/07 fix (announcing a dictation only once the microphone is really
+  captured) was already installed when the 27/07 leftover appeared, so it did not
+  close this hole; the exact cause of the orphaning is still not established, and
+  a double press was ruled out over ten runs at five intervals. This sweep makes
+  the failure harmless whatever its origin.
+
+- **The start failure no longer accuses a third party when the culprit was us.**
+  Right after closing one of our own leftovers, the message now says so, instead
+  of sending you to look for the fault where it is not.
+
+## [1.1.2] - 2026-07-25
+
+### Fixed
+
+- **A dictation is only announced once the microphone is really captured.**
+  `Popen` returns as soon as `arecord` is executed — measured at 0.001 s — but a
+  hardware device already held by another application only makes `arecord` exit
+  0.02 to 0.05 s later, and the first sample lands at 0.17 s. Checking liveness
+  immediately therefore announced "Recording" for a recorder that was already
+  dead. The press meant to stop it then found no session, took itself for a fresh
+  start, and left the microphone open for a whole recording that nothing could
+  stop — until the five-minute ceiling. Two 300-second captures were lost that
+  way on 2026-07-24, with speech in them. The start now waits for the first
+  sample written, or for the process to die; a recorder still alive after the
+  delay keeps the benefit of the doubt, because a slow microphone is better than
+  a refused dictation.
+- **A refused start is now visible.** It only ever went to `stderr`, which a
+  desktop keyboard shortcut has nobody to read — Cinnamon discards it. A failed
+  start now raises a `critical` notification, as a failed insertion already did.
+
 ## [1.1.1] - 2026-07-23
 
 ### Changed
@@ -628,7 +675,9 @@ First public release — a local-first dictation app for Linux.
 - MIT license, contributing guide, and CI running the test suite on Python
   3.10–3.13.
 
-[Unreleased]: https://github.com/collectifweb/aparte/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/collectifweb/aparte/compare/v1.1.3...HEAD
+[1.1.3]: https://github.com/collectifweb/aparte/compare/v1.1.2...v1.1.3
+[1.1.2]: https://github.com/collectifweb/aparte/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/collectifweb/aparte/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/collectifweb/aparte/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/collectifweb/aparte/compare/v1.0.0...v1.0.1

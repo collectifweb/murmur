@@ -1,7 +1,10 @@
 import json
 import os
 import struct
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
@@ -23,9 +26,12 @@ def _started_recorder(directory: str, pid: int = 4242, alive: bool = True):
     with mock.patch.dict(os.environ, {"APARTE_RUNTIME_DIR": directory}):
         with mock.patch.object(session.shutil, "which", return_value="/usr/bin/arecord"):
             with mock.patch.object(session, "_recorder_alive", return_value=alive):
-                with mock.patch.object(session.subprocess, "Popen") as popen:
-                    popen.return_value.pid = pid
-                    yield popen
+                # Aucun arecord simulé n'écrit d'échantillon : sans ce délai à zéro,
+                # chaque test attendrait la confirmation de capture jusqu'au bout.
+                with mock.patch.object(session, "_START_CONFIRMATION_SECONDS", 0.0):
+                    with mock.patch.object(session.subprocess, "Popen") as popen:
+                        popen.return_value.pid = pid
+                        yield popen
 
 
 def _wav_with_placeholder_header(path: Path, payload_bytes: int, sample_rate: int = 16000) -> None:
@@ -92,6 +98,27 @@ class StartRecordingTest(unittest.TestCase):
                 self.assertFalse(state.exists())
                 self.assertFalse(audio_path.exists())
 
+    def test_a_recorder_that_dies_moments_after_exec_is_reported(self):
+        """Le cas qui coûtait une dictée entière.
+
+        `Popen` rend la main dès l'exec — 0,001 s — alors qu'un micro déjà tenu par
+        une autre application ne fait sortir arecord qu'à 0,05 s. Contrôler la
+        vivacité tout de suite le voyait vivant, donc annonçait « Dictée en cours »
+        à un enregistreur mort ; l'appui censé arrêter ne trouvait plus de session
+        et rouvrait le micro pour un enregistrement entier, que plus rien
+        n'arrêtait.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            with _started_recorder(directory) as popen:
+                with mock.patch.object(session, "_START_CONFIRMATION_SECONDS", 0.1):
+                    with mock.patch.object(
+                        session, "_recorder_alive", side_effect=[True, False]
+                    ):
+                        with self.assertRaises(session.RecordingError):
+                            session.start_toggle_recording()
+                self.assertFalse(session.get_session_path().exists())
+                self.assertFalse(Path(popen.call_args.args[0][-1]).exists())
+
     def test_old_temporaries_are_swept_but_fresh_ones_are_left_alone(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "toggle-session.json"
@@ -104,6 +131,113 @@ class StartRecordingTest(unittest.TestCase):
                 session.start_toggle_recording()
             self.assertFalse(stale.exists())
             self.assertTrue(fresh.exists())
+
+
+@contextmanager
+def _recorder_in_proc(audio_path: Path):
+    """Un processus qui ressemble à notre arecord dans `/proc`, sans ouvrir de micro.
+
+    La détection ne lit que la ligne de commande : « arecord » et le chemin de la
+    capture suffisent. Un vrai processus, donc un vrai `/proc` et un vrai signal —
+    simuler l'un ou l'autre laisserait le ramassage sans preuve.
+    """
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)", "arecord", str(audio_path)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    try:
+        yield process
+    finally:
+        process.kill()
+        process.wait(timeout=5)
+
+
+def _toggle_name(directory: str, age_seconds: float) -> Path:
+    """Le nom d'une capture, dont l'horodatage porte l'âge que le test veut."""
+    return Path(directory) / f"toggle-{int((time.time() - age_seconds) * 1000)}.wav"
+
+
+class ForgottenRecorderTest(unittest.TestCase):
+    """Le résidu qui bloquait le micro cinq minutes.
+
+    Quatre fois en quatre jours, un `arecord` est resté vivant sans session. Le
+    micro étant ouvert en accès exclusif, chaque appui suivant échouait en
+    accusant « une autre application » — alors que l'application, c'était Aparté.
+    """
+
+    def test_a_recorder_no_session_follows_is_reaped_before_starting(self):
+        with tempfile.TemporaryDirectory() as directory:
+            audio_path = _toggle_name(directory, age_seconds=120)
+            with _recorder_in_proc(audio_path) as process:
+                with mock.patch.dict(os.environ, {"APARTE_RUNTIME_DIR": directory}):
+                    self.assertEqual(session._reap_forgotten_recorders(), 1)
+                self.assertIsNotNone(process.poll())
+
+    def test_a_recorder_younger_than_the_grace_delay_is_left_alone(self):
+        """Un appui concurrent peut être en train de publier sa session : son
+        enregistreur a quelques dixièmes de seconde et n'est pas un oubli."""
+        with tempfile.TemporaryDirectory() as directory:
+            audio_path = _toggle_name(directory, age_seconds=0)
+            with _recorder_in_proc(audio_path) as process:
+                with mock.patch.dict(os.environ, {"APARTE_RUNTIME_DIR": directory}):
+                    self.assertEqual(session._reap_forgotten_recorders(), 0)
+                self.assertIsNone(process.poll())
+
+    def test_a_recorder_writing_somewhere_else_is_never_touched(self):
+        """Le seul signe qu'un enregistreur est le nôtre est le dossier où il
+        écrit. Sans ce filtre, on enverrait un SIGINT à l'arecord de n'importe qui."""
+        with tempfile.TemporaryDirectory() as directory:
+            with tempfile.TemporaryDirectory() as elsewhere:
+                audio_path = _toggle_name(elsewhere, age_seconds=120)
+                with _recorder_in_proc(audio_path) as process:
+                    with mock.patch.dict(os.environ, {"APARTE_RUNTIME_DIR": directory}):
+                        self.assertEqual(session._reap_forgotten_recorders(), 0)
+                    self.assertIsNone(process.poll())
+
+    def test_an_active_session_is_never_reaped(self):
+        """Le ramassage ne s'exécute que faute de session : une dictée en cours
+        passe par `stop_toggle_recording`, jamais par un démarrage."""
+        with tempfile.TemporaryDirectory() as directory:
+            audio_path = _toggle_name(directory, age_seconds=120)
+            _wav_with_placeholder_header(audio_path, payload_bytes=32000)
+            state = Path(directory) / "toggle-session.json"
+            state.write_text(
+                json.dumps(
+                    {
+                        "pid": 4242,
+                        "audio_path": str(audio_path),
+                        "sample_rate": 16000,
+                        "started_at": time.time(),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch.dict(os.environ, {"APARTE_RUNTIME_DIR": directory}):
+                with mock.patch.object(session, "_recorder_alive", return_value=True):
+                    with mock.patch.object(session, "_reap_forgotten_recorders") as reap:
+                        with self.assertRaises(session.ToggleSessionError):
+                            session.start_toggle_recording()
+            reap.assert_not_called()
+
+    def test_the_failure_names_us_when_we_just_closed_our_own_recorder(self):
+        """Accuser un tiers juste après avoir fermé son propre résidu envoie
+        chercher la panne à l'endroit où elle n'est pas."""
+        with tempfile.TemporaryDirectory() as directory:
+            with _started_recorder(directory, alive=False):
+                with mock.patch.object(session, "_reap_forgotten_recorders", return_value=1):
+                    with self.assertRaises(session.RecordingError) as raised:
+                        session.start_toggle_recording()
+        self.assertIn("Aparté had left open", str(raised.exception))
+
+    def test_the_failure_still_names_a_third_party_when_nothing_was_reaped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with _started_recorder(directory, alive=False):
+                with mock.patch.object(session, "_reap_forgotten_recorders", return_value=0):
+                    with self.assertRaises(session.RecordingError) as raised:
+                        session.start_toggle_recording()
+        self.assertIn("Another application", str(raised.exception))
 
 
 class ClaimSessionTest(unittest.TestCase):
@@ -155,6 +289,38 @@ class RecorderAliveTest(unittest.TestCase):
             started_at=1.0,
         )
         self.assertFalse(session._recorder_alive(gone))
+
+
+class CaptureConfirmedTest(unittest.TestCase):
+    def _session(self, audio_path: Path) -> session.RecordingSession:
+        return session.RecordingSession(
+            pid=DEAD_PID, audio_path=audio_path, sample_rate=16000, started_at=1.0
+        )
+
+    def test_a_first_sample_confirms_without_consulting_proc(self):
+        """Un échantillon écrit prouve qu'arecord a bien obtenu le micro."""
+        with tempfile.TemporaryDirectory() as directory:
+            audio_path = Path(directory) / "toggle.wav"
+            _wav_with_placeholder_header(audio_path, payload_bytes=320)
+            with mock.patch.object(session, "_recorder_alive") as alive:
+                self.assertTrue(session._capture_confirmed(self._session(audio_path)))
+        alive.assert_not_called()
+
+    def test_a_recorder_that_never_captures_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            audio_path = Path(directory) / "toggle.wav"
+            with mock.patch.object(session, "_START_CONFIRMATION_SECONDS", 0.1):
+                with mock.patch.object(session, "_recorder_alive", side_effect=[True, False]):
+                    self.assertFalse(session._capture_confirmed(self._session(audio_path)))
+
+    def test_a_slow_recorder_still_alive_is_accepted(self):
+        """Au bout du délai, un enregistreur vivant garde le bénéfice du doute :
+        refuser un micro lent perdrait des dictées que rien n'empêchait."""
+        with tempfile.TemporaryDirectory() as directory:
+            audio_path = Path(directory) / "toggle.wav"
+            with mock.patch.object(session, "_START_CONFIRMATION_SECONDS", 0.0):
+                with mock.patch.object(session, "_recorder_alive", return_value=True):
+                    self.assertTrue(session._capture_confirmed(self._session(audio_path)))
 
 
 class CapturedSecondsTest(unittest.TestCase):
