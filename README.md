@@ -387,12 +387,17 @@ sudo apt install python3-gi gir1.2-ayatanaappindicator3-0.1
 script creates the virtualenv with `--system-site-packages` so it can see them.
 
 A virtualenv created before this change cannot see them, but it does not need
-rebuilding — flip one line in `.venv/pyvenv.cfg`, which keeps the multi-gigabyte
-Whisper and CUDA packages already installed:
+rebuilding — one line in `.venv/pyvenv.cfg` is enough, which keeps the
+multi-gigabyte Whisper and CUDA packages already installed:
 
 ```
 include-system-site-packages = true
 ```
+
+Re-running the install script does this for you. `aparte doctor` also names this
+case specifically, because the alternative failure — PyGObject genuinely not
+installed — needs the opposite move, and following the wrong one is a dead end:
+`apt install` answers "already the newest version" while the icon stays missing.
 
 Without the bindings, Aparté starts exactly as it did before, and `aparte doctor`
 tells you what is missing.

@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The tray icon now comes back on an install that predates
+  `--system-site-packages`.** PyGObject is an apt package, never a pip one, so a
+  virtualenv created without that flag can never see it — no matter what you
+  install. The install script has created new virtualenvs correctly for a while,
+  but it skips the whole block when `.venv` already exists, so an older install
+  stayed walled off forever. It now repairs `pyvenv.cfg` in place, which keeps
+  the multi-gigabyte Whisper and CUDA packages already installed.
+
+  `aparte doctor` also stopped sending people in circles. Both failures showed
+  the same missing icon and the same advice, `sudo apt install python3-gi …`,
+  but they need opposite moves: with the packages already installed and the
+  virtualenv walled off, apt answers "already the newest version" and nothing
+  changes. The check now names whichever case it is. Its wording is untouched —
+  it carries a static i18n key, and the key always wins over backend text — so
+  only the suggested command varies.
+
 - **Updating from Murmur no longer opens Aparté on a 404 page.** A desktop
   server started before the rename keeps running until the session ends — one
   was found alive six days later, from 25/07. Its Python code is in memory, so

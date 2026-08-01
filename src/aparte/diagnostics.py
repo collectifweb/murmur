@@ -3,7 +3,9 @@ from __future__ import annotations
 import importlib.util
 import os
 import shutil
+import sys
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 from .config import Settings
 from .hotkey import hotkey_info
@@ -28,6 +30,50 @@ def _has_module(name: str) -> bool:
         return importlib.util.find_spec(name) is not None
     except (ImportError, ValueError):
         return False
+
+
+def walled_venv_config() -> Path | None:
+    """Le `pyvenv.cfg` d'un venv muré contre les paquets système, s'il l'est.
+
+    PyGObject s'installe par apt, jamais par pip : un venv créé sans
+    `--system-site-packages` ne le verra donc **jamais**, quoi qu'on installe.
+    C'est un cul-de-sac silencieux — apt répond « déjà à la version la plus
+    récente » et l'icône reste absente — et il demande le geste inverse de
+    l'autre panne possible, où PyGObject manque pour de bon. Le diagnostic doit
+    les distinguer, sinon il envoie tourner en rond.
+
+    Vu le 31/07 sur une installation dont le venv précédait l'ajout du drapeau à
+    l'installeur : les paquets système étaient là, parfaitement fonctionnels, et
+    invisibles.
+    """
+    if sys.prefix == sys.base_prefix:
+        return None
+    config = Path(sys.prefix) / "pyvenv.cfg"
+    try:
+        content = config.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in content.splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key.strip() == "include-system-site-packages":
+            return config if value.strip().lower() == "false" else None
+    return None
+
+
+def _tray_fix() -> str:
+    """La commande qui débloque vraiment, selon laquelle des deux pannes c'est.
+
+    Le `detail` du check, lui, ne bouge pas : il porte une clé i18n statique, et
+    la clé gagne toujours sur le texte du backend. Sa phrase reste vraie des deux
+    côtés ; seule la commande change.
+    """
+    walled = walled_venv_config()
+    if walled is None:
+        return "sudo apt install python3-gi gir1.2-ayatanaappindicator3-0.1"
+    return (
+        "sed -i 's/^include-system-site-packages = false/"
+        f"include-system-site-packages = true/' {walled}"
+    )
 
 
 def _ollama_ok(settings: Settings) -> bool:
@@ -125,7 +171,7 @@ def collect_checks(settings: Settings) -> list[Check]:
             _has_module("gi"),
             "System",
             detail="needs PyGObject; a virtualenv only sees it with --system-site-packages",
-            fix="sudo apt install python3-gi gir1.2-ayatanaappindicator3-0.1",
+            fix=_tray_fix(),
         ),
         Check(
             "notify",

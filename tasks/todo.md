@@ -1182,3 +1182,51 @@ Aparté desktop running at http://127.0.0.1:8765
 déléguées tant que personne ne relance l'application : la reprise du port se fait
 au démarrage du serveur, pas depuis la ligne de commande. Sans conséquence
 visible — il transcrit avec le même Whisper — donc pas traité.
+
+---
+
+## Icône de barre système absente après mise à jour (31/07, hors lots)
+
+**Signalé par Alexandre**, même portable : aucune icône dans le panneau, et
+`sudo apt install python3-gi gir1.2-ayatanaappindicator3-0.1` répond « déjà à la
+version la plus récente » sans rien changer.
+
+**Cause tracée.** Les paquets système étaient bien installés et parfaitement
+fonctionnels : la chaîne complète `gi` + Gtk 3.0 + AyatanaAppIndicator3 importe
+sans broncher sous `/usr/bin/python3`. Mais `~/murmur/.venv/pyvenv.cfg` portait
+`include-system-site-packages = false`. PyGObject s'installe par apt, jamais par
+pip : un venv muré ne le verra donc jamais, quoi qu'on installe. `tray.AVAILABLE`
+restait à faux, `build_tray()` rendait None, et le serveur tournait sans icône.
+
+**Deux défauts d'outillage, pas un.**
+
+- L'installeur crée les nouveaux venv avec `--system-site-packages` depuis un
+  moment, mais son bloc est gardé par `if [[ ! -x ".venv/bin/python" ]]` : un venv
+  existant n'était jamais réparé. Même famille que la reprise du port ci-dessus —
+  le correctif profite aux nouvelles installations et jamais aux anciennes.
+- `aparte doctor` proposait `sudo apt install …` dans les deux cas. Or les deux
+  pannes demandent des gestes opposés, et suivre le mauvais est un cul-de-sac
+  fermé : apt dit « déjà installé », l'icône reste absente, il n'y a nulle part
+  où aller. Le README documentait pourtant déjà la bascule d'une ligne — le
+  savoir existait, l'outillage ne le sortait pas au moment utile.
+
+- [x] `scripts/install-linux.sh` répare `pyvenv.cfg` sur place quand il trouve un
+      venv muré. Recréer le venv réinstallerait Whisper et CUDA, plusieurs
+      centaines de mégaoctets, pour une ligne de configuration.
+- [x] `walled_venv_config()` dans `diagnostics.py` : le check `tray` nomme
+      laquelle des deux pannes c'est et donne la commande qui débloque vraiment.
+- [x] Seul le `fix` varie. Le `detail` porte une clé i18n statique, et la clé gagne
+      toujours sur le backend : le rendre dynamique l'aurait écrasé en silence.
+      Le `fix`, lui, n'est pas traduit — `app.js` le rend tel quel dans un bloc à
+      copier, parce que c'est une commande.
+- [x] Tests (259 verts) : venv muré nommé, venv ouvert ignoré, hors venv ignoré,
+      et les deux commandes rendues dans le bon cas.
+- [x] README : l'installeur répare tout seul, et `doctor` nomme le cas.
+
+**Vérifié en vrai.** Sur la machine : une ligne changée, `gi` visible,
+`tray.AVAILABLE = True`, GTK et l'indicateur chargés dans le processus (10
+correspondances dans `/proc/<pid>/maps`), `doctor` passé de « missing » à « ok ».
+Aucune dépendance du venv masquée par le système — `faster_whisper`,
+`ctranslate2`, `numpy` et `sounddevice` résolvent toujours dans le venv, qui
+garde la priorité. Et sur un venv jetable : muré → `gi` invisible → bloc de
+l'installeur → `gi` visible, idempotent au second passage.

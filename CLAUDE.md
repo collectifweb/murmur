@@ -227,6 +227,15 @@ phrases voisines.
   compris les `aria-label` et les `title` (via `data-i18n-aria` /
   `data-i18n-title`). Un libellé écrit en dur dans `index.html` est un bogue :
   un lecteur d'écran configuré en français annoncerait de l'anglais.
+- Le panneau de diagnostic traduit chaque check **par clé** (`app.js` :
+  `tKey("check." + c.key + ".detail", c.detail)`), et la clé i18n **gagne
+  toujours** sur le texte du backend, qui n'est qu'un repli. Donc un check dont
+  le `detail` **varie** ne doit pas porter de clé i18n statique : elle l'écraserait
+  en silence et pourrait contredire l'icône. **Le `fix`, lui, n'est pas traduit** —
+  `app.js` le rend tel quel dans un bloc à copier, parce que c'est une commande.
+  C'est donc là que se pose une instruction qui dépend de l'état, sans toucher à
+  la traduction. Le check `tray` s'appuie sur cette différence : sa phrase reste
+  vraie des deux côtés, seule sa commande change.
 - Le texte d'aide d'un champ se pose **hors** de son `<label>`, et se rattache
   par `aria-describedby`. Dans le label, il entre dans le **nom accessible** du
   contrôle : « Nombres dictés » s'annonçait suivi de ses trois phrases d'aide.
@@ -346,6 +355,23 @@ phrases voisines.
 - **La version se déclare à deux endroits** : `src/aparte/__init__.py` et
   `pyproject.toml`. Les désynchroniser fait mentir le panneau de mise à jour,
   qui lit `__version__`.
+
+### Installation Linux
+
+- **PyGObject vient d'apt, jamais de pip.** Un venv créé sans
+  `--system-site-packages` ne le verra donc **jamais** : pas d'icône de barre
+  système, et `apt install` répond « déjà à la version la plus récente ». Deux
+  conséquences qu'on a payées le 31/07 :
+  - **L'installeur répare un venv existant**, il ne se contente pas d'en créer
+    des bons. Son bloc de création est gardé par `if [[ ! -x ".venv/bin/python" ]]`,
+    donc une installation d'avant le drapeau restait murée pour toujours. La
+    réparation réécrit `pyvenv.cfg` sur place : recréer le venv réinstallerait des
+    centaines de mégaoctets de Whisper et de CUDA pour une ligne.
+  - **Le `doctor` distingue les deux pannes**, parce qu'elles demandent des gestes
+    opposés (`walled_venv_config()`). Une icône absente peut vouloir dire « les
+    paquets manquent » ou « le venv ne les voit pas » ; donner le mauvais conseil
+    envoie tourner en rond, ce qui est arrivé. Seul le `fix` varie — voir la règle
+    du `detail` et des clés i18n plus haut.
 
 ## Git
 

@@ -51,6 +51,18 @@ if [[ ! -x ".venv/bin/python" ]]; then
   fi
 fi
 
+# Le bloc ci-dessus ne s'exécute pas quand le venv existe déjà, donc un venv créé
+# avant l'ajout de --system-site-packages restait muré pour toujours : PyGObject
+# s'installe par apt, jamais par pip, et `apt install` répondait « déjà à la
+# version la plus récente » pendant que l'icône de barre système restait absente.
+# La réparation se fait sur place — recréer le venv réinstallerait plusieurs
+# centaines de mégaoctets pour une ligne de configuration.
+if [[ -f ".venv/pyvenv.cfg" ]] && grep -q '^include-system-site-packages = false' .venv/pyvenv.cfg; then
+  echo "Opening the existing virtualenv to system packages (needed for the tray icon)..."
+  sed -i 's/^include-system-site-packages = false/include-system-site-packages = true/' \
+    .venv/pyvenv.cfg
+fi
+
 # shellcheck disable=SC1091
 source .venv/bin/activate
 python -m pip install --upgrade pip
