@@ -7,7 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **Updating from Murmur no longer opens Aparté on a 404 page.** A desktop
+  server started before the rename keeps running until the session ends — one
+  was found alive six days later, from 25/07. Its Python code is in memory, so
+  its API answers normally, but static files are read from disk on *every*
+  request and the update moved them. It therefore survived as a server that
+  404s its own page while still holding port 8765. Launching Aparté recognised
+  the live API, handed over, and opened the browser on that error page: the
+  install had succeeded and the app looked broken.
+
+  `already_running()` now asks a second question — does it still serve its
+  page? — which is the only check that touches the disk, and so the only one
+  that separates a live server from a surviving one. Detection alone was not
+  enough: the port stayed held, and falling back to a random port would have
+  broken hotkey dictation, which delegates to 8765 by name. Aparté now reclaims
+  the port. It identifies the process through `/proc` by two signatures — the
+  `desktop` subcommand and the program name, looked for in the first two argv
+  slots only — then stops it with `SIGTERM` and takes over. A path that merely
+  contains "murmur" proves nothing, and there is no escalation to `SIGKILL`.
+
+  Delegating a transcription still only asks whether the API answers: it never
+  needed the interface files, and refusing it would reload Whisper for nothing
+  (1.53 s against 0.26 s) because an HTML page moved.
 
 ## [1.1.3] - 2026-07-27
 

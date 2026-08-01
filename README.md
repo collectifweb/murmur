@@ -169,6 +169,12 @@ Pull and re-run the install script as above; the rename is handled for you:
 - The old desktop launcher, icon, and autostart entry are removed when you
   re-run `aparte install-desktop` / `aparte install-autostart`, so you don't end
   up with two menu entries or two servers competing at login.
+- A Murmur server still running from before the update is stopped and its port
+  taken over the next time you launch Aparté. Those entries are removed as
+  files, but a server started at a previous login keeps running until you log
+  out — and once the update has moved its files, it answers its API from memory
+  while serving 404 for its own page. Without this, launching Aparté handed you
+  over to it and opened the browser on that error page.
 
 ### Extras, à la carte
 

@@ -1130,3 +1130,55 @@ d'une minute. Un redémarrage la règle ; rien à corriger dans le code.
 **Reste ouvert.** Un enregistreur qui meurt *en cours* de dictée avec moins de
 0,3 s capté fait toujours de l'appui suivant un nouveau départ silencieux. Pas
 observé, pas traité.
+
+---
+
+## Reprise du port après mise à jour (31/07, hors lots)
+
+**Signalé par Alexandre**, sur le portable qui tournait sous Murmur : `git pull`
+puis installeur, installation annoncée réussie, et lancer Aparté ouvre une page
+404.
+
+**Cause tracée, pas devinée.** Un serveur de bureau lancé le 25/07 par l'ancienne
+entrée d'autostart (`python -m murmur desktop --no-browser`) était encore vivant
+six jours plus tard — la session n'avait pas été refermée. Le `git pull` a renommé
+`src/murmur/` en `src/aparte/` sous ses pieds. Son code Python était déjà en
+mémoire, donc `/api/config` répondait parfaitement ; ses fichiers statiques, eux,
+sont relus sur le disque à chaque requête, et `ASSETS_DIR` pointait sur un dossier
+disparu. Serveur survivant : API à 200, page d'accueil à 404, port 8765 tenu.
+
+`already_running()` reconnaissait « un serveur Aparté » à la présence de
+`allowed_models` dans `/api/config` — un champ que Murmur émettait déjà. Le
+lanceur concluait donc « déjà lancé », ouvrait le navigateur dessus, et sortait.
+
+`remove_legacy_entries()` faisait bien son travail : il supprime des **fichiers**.
+Rien dans le parcours de mise à jour n'arrêtait le **processus** hérité de la
+session précédente.
+
+- [x] `already_running()` pose une seconde question : la page d'accueil se
+      sert-elle encore ? C'est le seul contrôle qui touche le disque, donc le seul
+      qui distingue un serveur vivant d'un serveur survivant.
+- [x] `stale_server.reclaim_port()` reprend le port. Détecter ne suffisait pas :
+      le port restait tenu, et repartir sur un port au hasard aurait cassé la
+      dictée au raccourci, qui délègue au 8765 en dur.
+- [x] Identité prouvée sur `/proc`, deux signatures (sous-commande `desktop` +
+      nom du programme aux deux premières places d'`argv`), même discipline que
+      `_recorder_alive()`. Un chemin contenant « murmur » ne prouve rien :
+      l'installation vit dans `~/murmur`.
+- [x] La délégation garde son propre critère (`_api_responds()`) : transcrire n'a
+      jamais eu besoin des fichiers de l'interface.
+- [x] Tests (254 verts), dont un vrai processus fils nommé `aparte` qui écoute et
+      répond 404 à sa page — le serveur périmé, pour de bon.
+
+**Vérifié en vrai**, sur le port 8765 et le binaire installé, panne reproduite à
+l'identique (API 200 / page 404) :
+
+```
+Stopped a stale Aparté server (pid 219960) still holding port 8765.
+Aparté desktop running at http://127.0.0.1:8765
+```
+
+**Reste ouvert.** Un serveur périmé continue de recevoir les transcriptions
+déléguées tant que personne ne relance l'application : la reprise du port se fait
+au démarrage du serveur, pas depuis la ligne de commande. Sans conséquence
+visible — il transcrit avec le même Whisper — donc pas traité.

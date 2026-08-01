@@ -304,6 +304,30 @@ phrases voisines.
   n'existe que dans ce processus et que l'application relit le fichier de
   configuration ; **le repli local doit rester intact et testé**, c'est le chemin
   que personne n'exerce à la main et qui pourrirait sans qu'on le voie.
+- **Un serveur qui répond à l'API n'est pas un serveur vivant.** `already_running()`
+  pose deux questions, et la seconde a coûté cher : l'API est-elle la nôtre, **et**
+  la page d'accueil se sert-elle encore ? Un serveur laissé par une session ouverte
+  avant le renommage Murmur → Aparté garde son code en mémoire, donc répond
+  parfaitement à `/api/config` ; mais les fichiers statiques sont relus sur le
+  disque **à chaque requête**, et le `git pull` de la mise à jour les a déplacés
+  sous ses pieds. On lui passait la main, et l'utilisateur recevait une page 404
+  après une installation annoncée réussie (vu le 31/07, un serveur du 25/07 encore
+  en vie six jours plus tard). La page est le seul contrôle qui distingue les deux,
+  parce qu'elle touche le disque.
+  - **Détecter ne suffisait pas** : le port restait tenu, et repartir sur un port
+    au hasard aurait cassé la dictée au raccourci, qui délègue au 8765 en dur.
+    `stale_server.reclaim_port()` reprend le port, et c'est ce qui rend la panne
+    sans conséquence.
+  - **L'identité se prouve sur `/proc`, jamais sur le PID.** Même discipline que
+    `_recorder_alive()` : deux signatures, la sous-commande `desktop` **et** le
+    programme, cherché aux deux premières places d'`argv` seulement. L'installation
+    vit dans `~/murmur` chez son auteur : un chemin qui contient « murmur » ne
+    prouve rien, et un `SIGTERM` sur cette foi tuerait le processus d'un autre.
+  - **La délégation, elle, ne demande que l'API** (`_api_responds()`). Transcrire
+    n'a jamais eu besoin des fichiers de l'interface ; les confondre rechargerait
+    Whisper pour rien — 1,53 s contre 0,26 s — au motif qu'une page HTML a bougé.
+  - **Aucune escalade en `SIGKILL`.** Un serveur qui survit au `SIGTERM` le fait
+    pour une raison qu'on ignore ; l'appelant repart sur un autre port.
 - `/api/update/apply` lance un `git merge --ff-only` puis `pip install`. Toute
   nouvelle route qui exécute une commande passe par la même porte, sans
   exception.
@@ -325,7 +349,12 @@ phrases voisines.
 
 ## Git
 
-- Le remote s'appelle **`Murmur`**, pas `origin`. Ne pas supposer `origin`.
+- Le dépôt est **`github.com/collectifweb/aparte`**. Il s'appelait `murmur` :
+  GitHub redirige encore l'ancienne URL, donc un clone d'avant le renommage
+  fonctionne sans rien dire, jusqu'au jour où la redirection tombera. Corriger
+  avec `git remote set-url`.
+- **Le nom du remote change d'une machine à l'autre** (`Murmur`, `origin`,
+  `Aparte` selon le clone). Ne rien supposer : lire `git remote -v`.
 - Un `git pull` peut se déclencher pendant une session, mettre le travail de
   côté automatiquement et échouer à le remettre. Commiter tôt.
 - Jamais de `Co-Authored-By: Claude` ni de mention d'IA dans les messages.

@@ -17,6 +17,7 @@ from .clipboard import copy_text, paste_text
 from .config import Settings, get_env, load_config, positive_int, update_config
 from .diagnostics import collect_diagnostics
 from .polish import PolishOptions, build_polisher
+from .stale_server import reclaim_port
 from .transcription import build_transcriber
 from .tray import build_tray
 from .update import DONE_MARKER, apply_update, check_update, restart
@@ -75,6 +76,14 @@ def run_desktop(host: str, port: int, settings: Settings, open_browser: bool = T
             webbrowser.open(running)
         return
 
+    # Personne de vivant sur le port, mais il peut rester tenu par notre propre
+    # serveur d'avant la mise à jour. Le reprendre vaut mieux que démarrer à côté
+    # sur un port au hasard : le raccourci de dictée délègue au 8765 en dur, et
+    # ne trouverait plus personne.
+    stale = reclaim_port(host, port)
+    if stale is not None:
+        print(f"Stopped a stale Aparté server (pid {stale}) still holding port {port}.")
+
     port = _available_port(host, port)
     server = ThreadingHTTPServer((host, port), handler_factory(settings))
     url = f"http://{host}:{server.server_port}"
@@ -97,10 +106,41 @@ def run_desktop(host: str, port: int, settings: Settings, open_browser: bool = T
 
 
 def already_running(host: str, port: int, timeout: float = 2.0) -> str | None:
-    """The address of an Aparté server already listening here, if there is one.
+    """The address of a *usable* Aparté server already listening here, if any.
+
+    Deux questions, et la seconde est celle qui manquait. « Répond-il à notre
+    API ? » ne suffit pas : un serveur laissé par une session ouverte avant le
+    renommage Murmur → Aparté répond exactement la même chose, parce que son code
+    est en mémoire. Mais il sert ses fichiers depuis le disque, à chaque requête,
+    et la mise à jour les a déplacés sous ses pieds. On lui passait la main, et
+    l'utilisateur recevait une page 404 après une installation réussie.
+
+    Donc la seconde question : sait-il encore rendre sa page ? Elle ne coûte
+    qu'un aller-retour en boucle locale, et elle est la seule qui distingue un
+    serveur vivant d'un serveur survivant.
 
     Anything else holding the port — another application, a stale service — is
     not us, and the caller falls back to its usual free-port search.
+    """
+    url = _api_responds(host, port, timeout)
+    if url is None:
+        return None
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            if response.status != HTTPStatus.OK:
+                return None
+    except OSError:
+        return None
+    return url
+
+
+def _api_responds(host: str, port: int, timeout: float) -> str | None:
+    """L'adresse d'un serveur dont l'API est la nôtre. Rien de plus.
+
+    Séparé d'`already_running` parce que les deux appelants ne posent pas la même
+    question : déléguer une transcription n'a besoin que du modèle en mémoire,
+    jamais des fichiers de l'interface. Les confondre ferait recharger Whisper
+    pour rien — 1,53 s contre 0,26 s — au motif qu'une page HTML a bougé.
     """
     url = f"http://{host}:{port}"
     try:
@@ -139,7 +179,7 @@ def transcribe_via_running_app(
     """
     if any(get_env(name) for name in _ENV_OVERRIDES):
         return None
-    url = already_running(host, port)
+    url = _api_responds(host, port, timeout=2.0)
     if url is None:
         return None
     try:

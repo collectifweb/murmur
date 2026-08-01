@@ -87,6 +87,34 @@ class AlreadyRunningTest(unittest.TestCase):
         port = self._serve(Stranger)
         self.assertIsNone(already_running("127.0.0.1", port))
 
+    def test_ignores_a_server_that_no_longer_serves_its_page(self):
+        """Le serveur laissé par une session ouverte avant le renommage répond
+        encore à l'API — son code est en mémoire — mais relit ses fichiers sur le
+        disque, que la mise à jour a déplacés. Lui passer la main ouvrait le
+        navigateur sur une page 404 après une installation réussie."""
+
+        class Renamed(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path != "/api/config":
+                    self.send_error(HTTPStatus.NOT_FOUND)
+                    return
+                body = json.dumps({"allowed_models": ["small"], "model": "small"}).encode()
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                return
+
+        port = self._serve(Renamed)
+        self.assertIsNone(already_running("127.0.0.1", port))
+        # Mais son API reste bonne : déléguer une transcription n'a pas besoin
+        # des fichiers de l'interface, et la refuser rechargerait Whisper pour rien.
+        self.assertEqual(
+            desktop._api_responds("127.0.0.1", port, timeout=2.0), f"http://127.0.0.1:{port}"
+        )
+
 
 class StaticAssetsTest(unittest.TestCase):
     def test_all_static_files_exist_on_disk(self):
