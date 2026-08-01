@@ -14,6 +14,10 @@ Deux listes, parce que le risque de se tromper n'est pas le même :
   qui écrit le texte d'une vidéo peut très bien dire « merci d'avoir regardé
   cette vidéo ». On ne les retire que si elles constituent la **totalité** de la
   transcription — c'est-à-dire quand il n'y avait que du silence à transcrire.
+  « Totalité » veut dire **une ou plusieurs**, mises bout à bout : sur du
+  silence, Whisper ne rend pas l'hallucination une fois, il la répète et en
+  mélange les variantes. Exiger qu'un seul motif couvre tout le texte laissait
+  donc passer le cas le plus courant.
 
 La règle du module est celle de `numbers.py` : dans le doute, ne rien toucher.
 Mieux vaut laisser passer une hallucination que manger une phrase dictée.
@@ -43,6 +47,10 @@ GENERIC = (
     "Merci d'avoir regardé cette vidéo",
     "Merci d'avoir regardé cette vidéo, à la prochaine",
     "Merci à tous d'avoir regardé cette vidéo",
+    # Variante courte, observée en queue d'une répétition le 01/08 : Whisper
+    # tronque la formule quand il la répète. Sans elle, la séquence entière
+    # échappait au filtre pour ces trois mots.
+    "Merci d'avoir regardé",
     "Abonnez-vous",
     "Thanks for watching",
     "Thank you for watching",
@@ -78,6 +86,33 @@ _GENERIC_RE = tuple(
 )
 
 
+def _is_only_generics(text: str) -> bool:
+    """Le texte est-il entièrement fait de formules génériques, bout à bout ?
+
+    Consommation pas à pas, et non un motif `(?:a|b|c)+` : les formules partagent
+    leurs débuts (« Merci d'avoir regardé » ouvre trois entrées), et un `+`
+    posé sur des alternatives ambiguës explose en retours arrière dès que
+    Whisper en empile quelques dizaines — ce qu'il fait précisément sur du
+    silence. Ici chaque tour avance, donc le coût suit la longueur du texte.
+
+    On prend la correspondance la **plus longue** à chaque position. En cas
+    d'ambiguïté irréductible, l'échec de consommation garde le texte : c'est le
+    sens du module, mieux vaut laisser passer une hallucination que manger une
+    phrase dictée.
+    """
+    position = 0
+    while position < len(text):
+        longest = 0
+        for pattern in _GENERIC_RE:
+            found = pattern.match(text, position)
+            if found:
+                longest = max(longest, found.end() - position)
+        if longest == 0:
+            return False
+        position += longest
+    return position > 0
+
+
 def strip(text: str) -> str:
     """Le texte débarrassé des génériques inventés. Une dictée normale ressort
     identique, à l'octet près."""
@@ -91,6 +126,6 @@ def strip(text: str) -> str:
     # Reste les espaces en double que ce remplacement vient de créer. Les sauts
     # de ligne, eux, sont du contenu et ne doivent pas être écrasés.
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned).strip()
-    if any(pattern.fullmatch(cleaned) for pattern in _GENERIC_RE):
+    if _is_only_generics(cleaned):
         return ""
     return cleaned

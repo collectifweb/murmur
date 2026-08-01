@@ -127,6 +127,18 @@ de domaine ou de diffuseur, donc se retire partout ; `GENERIC` est dictable
 totalité du texte. Ne jamais mettre un fragment seul comme « Amara.org » dans
 `SIGNED` : « je cite Amara.org » est une dictée légitime.
 
+**« Totalité » veut dire une ou plusieurs, bout à bout.** Sur du silence, Whisper
+ne rend pas l'hallucination une fois : il la répète et en tronque les variantes.
+Exiger qu'un seul motif couvre tout le texte laissait passer le cas le plus
+courant — « Merci d'avoir regardé cette vidéo. Merci d'avoir regardé. » est
+arrivé tel quel dans un historique le 01/08. La consommation se fait **pas à
+pas** (`_is_only_generics`), jamais par un motif `(?:a|b|c)+` : les formules
+partagent leurs débuts, et un `+` posé sur des alternatives ambiguës part en
+retours arrière exponentiels dès quelques dizaines de répétitions, ce que Whisper
+produit précisément dans ce cas. Dès qu'un mot dicté résiste à la consommation,
+**rien** ne part : c'est la même règle que `numbers.py`, dans le doute on ne
+touche à rien.
+
 Le remplacement se fait par **une espace, pas par rien** : le motif mange
 l'espace des deux côtés, et retirer un générique au milieu recollerait les
 phrases voisines.

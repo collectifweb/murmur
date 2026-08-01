@@ -1,3 +1,4 @@
+import time
 import unittest
 
 from aparte.hallucinations import strip
@@ -62,6 +63,40 @@ class GenericOutroTest(unittest.TestCase):
 
     def test_thanks_for_watching_alone(self):
         self.assertEqual(strip("Thanks for watching!"), "")
+
+
+class RepeatedOutroTest(unittest.TestCase):
+    """Sur du silence, Whisper ne rend pas l'hallucination une fois : il la
+    répète et en tronque les variantes. Exiger qu'un seul motif couvre tout le
+    texte laissait donc passer le cas le plus courant."""
+
+    def test_the_pair_that_reached_a_real_history(self):
+        """Vu le 01/08 : 144 s captées sur un micro qui n'entendait presque rien
+        — crête à 4566 sur 32768 — et ceci livré à l'utilisateur."""
+        got = strip("Merci d'avoir regardé cette vidéo. Merci d'avoir regardé.")
+        self.assertEqual(got, "")
+
+    def test_the_same_formula_twice(self):
+        text = "Merci d'avoir regardé cette vidéo. Merci d'avoir regardé cette vidéo."
+        self.assertEqual(strip(text), "")
+
+    def test_variants_mixed_together(self):
+        self.assertEqual(strip("Abonnez-vous. Thanks for watching. Merci d'avoir regardé."), "")
+
+    def test_a_dictation_that_opens_with_a_formula_still_stays(self):
+        """La sécurité tient à la consommation *entière* : dès qu'un mot dicté
+        reste, rien ne part. C'est le cas qui distingue ce filtre d'un rasoir."""
+        dictated = "Merci d'avoir regardé cette vidéo, elle explique tout le processus."
+        self.assertEqual(strip(dictated), dictated)
+
+    def test_a_long_repetition_does_not_blow_up(self):
+        """Les formules partagent leurs débuts. Un motif `(?:a|b|c)+` par-dessus
+        ces alternatives ambiguës part en retours arrière exponentiels dès
+        quelques dizaines de répétitions — d'où la consommation pas à pas."""
+        start = time.perf_counter()
+        text = "Merci d'avoir regardé cette vidéo. " * 400 + "et là je dicte vraiment"
+        self.assertEqual(strip(text), text.strip())
+        self.assertLess(time.perf_counter() - start, 2.0)
 
 
 class NoRegressionTest(unittest.TestCase):

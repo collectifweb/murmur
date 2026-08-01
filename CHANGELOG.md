@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [1.1.5] - 2026-08-01
+
+### Fixed
+
+- **A repeated subtitle outro no longer reaches your text.** Whisper invents
+  end-of-video credits when it hears nothing, and the filter removed them only
+  when a single pattern covered the whole transcript. But on silence Whisper
+  does not produce the hallucination once: it repeats it, and truncates the
+  variants as it goes. "Merci d'avoir regardé cette vidéo. Merci d'avoir
+  regardé." matched no single pattern and was delivered as a dictation — 144
+  seconds recorded through a microphone that heard almost nothing, peaking at
+  4566 out of 32768.
+
+  The whole-transcript rule stands, because these formulas are dictable and
+  removing one mid-sentence would eat real speech. It now accepts a *run* of
+  them rather than exactly one, and the short "Merci d'avoir regardé" joined the
+  list. A transcript that opens with a formula and continues with dictated words
+  is still returned untouched: the removal happens only if the entire text is
+  consumed.
+
+  The run is consumed step by step rather than with a `(?:a|b|c)+` pattern. The
+  formulas share their openings, so a `+` over ambiguous alternatives backtracks
+  exponentially past a few dozen repetitions — exactly what Whisper produces
+  here. 400 repetitions followed by a real word now resolve in about 10 ms.
+
 ## [1.1.4] - 2026-08-01
 
 ### Fixed
@@ -549,6 +574,7 @@ First public release — a local-first dictation app for Linux.
   3.10–3.13.
 
 [Unreleased]: https://github.com/collectifweb/aparte/compare/v1.1.3...HEAD
+[1.1.5]: https://github.com/collectifweb/aparte/compare/v1.1.4...v1.1.5
 [1.1.4]: https://github.com/collectifweb/aparte/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/collectifweb/aparte/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/collectifweb/aparte/compare/v1.1.1...v1.1.2
