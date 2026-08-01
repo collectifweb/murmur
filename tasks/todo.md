@@ -1230,3 +1230,44 @@ Aucune dépendance du venv masquée par le système — `faster_whisper`,
 `ctranslate2`, `numpy` et `sounddevice` résolvent toujours dans le venv, qui
 garde la priorité. Et sur un venv jetable : muré → `gi` invisible → bloc de
 l'installeur → `gi` visible, idempotent au second passage.
+
+---
+
+## Générique de sous-titrage répété (01/08, hors lots)
+
+**Trouvé en traçant un « la dictée marche pas »**, pas signalé comme tel. La
+dictée avait bien abouti : à 00:05:23, l'historique a reçu « Merci d'avoir
+regardé cette vidéo. Merci d'avoir regardé. »
+
+**Deux causes empilées, et une seule est du code.**
+
+- **Côté machine.** La source par défaut de PipeWire avait basculé sur un
+  adaptateur USB (Avantree Resolve-C) pendant que l'utilisateur parlait dans son
+  portable. Les 144 s captées plafonnent à 4566 sur 32768, RMS global 37 : du
+  bruit de pièce, pas de la parole. Le réglage `microphone` étant vide, `arecord`
+  suit cette source par défaut, qui bouge à chaque connexion d'un périphérique
+  audio. Rien à corriger dans le code : le réglage existe, il suffit de le poser.
+- **Côté code, et c'est le vrai trou.** `hallucinations.py` ne retirait un
+  générique que si **un seul** motif couvrait tout le texte. Or sur du silence
+  Whisper ne le rend pas une fois : il le répète, et en tronque les variantes. La
+  paire livrée ne correspondait donc à aucun motif entier.
+
+- [x] `_is_only_generics()` accepte une **suite** de formules, plus seulement une.
+      La sécurité ne bouge pas : dès qu'un mot dicté résiste à la consommation,
+      rien ne part.
+- [x] « Merci d'avoir regardé » ajouté à `GENERIC` — la variante courte observée
+      en queue de répétition, sans laquelle la séquence échappait au filtre pour
+      ces trois mots.
+- [x] Consommation pas à pas, **jamais** un motif `(?:a|b|c)+` : les formules
+      partagent leurs débuts, et un `+` sur des alternatives ambiguës part en
+      retours arrière exponentiels dès quelques dizaines de répétitions — ce que
+      Whisper produit précisément ici. Mesuré : 400 répétitions suivies d'un vrai
+      mot, 10,6 ms.
+- [x] Tests (264 verts), dont le cas réel, les variantes mêlées, la dictée qui
+      *commence* par une formule et doit rester intacte, et la non-explosion.
+
+**Reste ouvert.** L'appui « Dictée non démarrée » de la capture d'écran est un
+événement **distinct** et non expliqué : `reaped` valait 0, donc aucun
+enregistreur oublié n'était en cause, et l'appui suivant a fonctionné. Un
+périphérique USB en sortie de veille est un suspect, pas une conclusion. Ne pas
+écrire qu'on l'a trouvée.
